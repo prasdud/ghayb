@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, Pressable, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Plus, X } from 'lucide-react-native';
+import { Plus, X, MoreVertical } from 'lucide-react-native';
 import { BlobBackground } from '../../components/BlobBackground';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
@@ -16,6 +16,7 @@ const DUMMY_CHATS = [
 export default function ChatListScreen() {
     const router = useRouter();
     const [isOverlayVisible, setOverlayVisible] = useState(false);
+    const [isMenuVisible, setMenuVisible] = useState(false);
     const [uauid, setUauid] = useState('');
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [progress, setProgress] = useState(0);
@@ -83,7 +84,6 @@ export default function ChatListScreen() {
                 } else if (id === 'prasdud') {
                     setStatus('success');
                 } else {
-                    // Treat others as missing as well for this prototype
                     setStatus('error');
                 }
             }, 300);
@@ -95,11 +95,43 @@ export default function ChatListScreen() {
             <BlobBackground />
 
             {/* Header */}
-            <View className="px-6 pt-16 pb-6 flex-row justify-between items-center z-10">
+            <View className="px-6 pt-16 pb-6 flex-row justify-between items-center z-10 relative">
                 <Text className="font-serif text-4xl font-bold text-foreground tracking-tight">ghayb.</Text>
-                <Pressable className="w-12 h-12 rounded-full border border-timber/50 bg-white/50 flex items-center justify-center shadow-[0_4px_20px_-2px_rgba(93,112,82,0.1)] hover:bg-white/80 transition-colors">
-                    <Text className="font-serif font-bold text-foreground">{'...'}</Text>
+                <Pressable
+                    onPress={() => setMenuVisible(true)}
+                    className="w-12 h-12 rounded-full border border-timber/50 bg-white/50 flex items-center justify-center shadow-[0_4px_20px_-2px_rgba(93,112,82,0.1)] hover:bg-white/80 active:scale-95 transition-all"
+                >
+                    <MoreVertical color="#2C2C24" size={20} />
                 </Pressable>
+
+                {/* Dropdown Menu Modal */}
+                <Modal visible={isMenuVisible} transparent animationType="fade">
+                    <Pressable
+                        className="flex-1 bg-[#2C2C24]/10 backdrop-blur-sm"
+                        onPress={() => setMenuVisible(false)}
+                    >
+                        <View className="absolute top-28 right-6 w-48 bg-[#FEFEFA] rounded-[1.5rem] border border-timber/40 shadow-[0_10px_40px_-5px_rgba(93,112,82,0.2)] overflow-hidden">
+                            <Pressable
+                                onPress={() => { setMenuVisible(false); }}
+                                className="p-4 border-b border-timber/20 active:bg-moss/10"
+                            >
+                                <Text className="font-sans text-sm font-bold text-foreground">Sync Network</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => { setMenuVisible(false); router.push('/(main)/settings'); }}
+                                className="p-4 border-b border-timber/20 active:bg-moss/10"
+                            >
+                                <Text className="font-sans text-sm font-bold text-foreground">Settings</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => { setMenuVisible(false); router.replace('/signin'); }}
+                                className="p-4 active:bg-destructive/10"
+                            >
+                                <Text className="font-sans text-sm font-bold text-destructive">Lock Identity</Text>
+                            </Pressable>
+                        </View>
+                    </Pressable>
+                </Modal>
             </View>
 
             {/* Chat List */}
