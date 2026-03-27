@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["DragbinNativeCryptoModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.dragbinnativecrypto.DragbinNativeCryptoModule"]
+  }
+}

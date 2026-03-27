@@ -1,0 +1,18 @@
+{
+  "name": "@dragbin/native-crypto",
+  "version": "1.0.0",
+  "description": "React Native native module for Kyber1024 KEM and Argon2id — crypto compat layer for @dragbin/crypto",
+  "main": "src/index.ts",
+  "scripts": {
+    "setup": "node scripts/setup.js"
+  },
+  "peerDependencies": {
+    "expo": ">=50.0.0",
+    "react-native": ">=0.73.0",
+    "react-native-quick-crypto": ">=0.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~5.9.2"
+  }
+}

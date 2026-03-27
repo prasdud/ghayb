@@ -1,0 +1,37 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'expo-module-gradle-plugin'
+
+android {
+    compileSdkVersion safeExtGet('compileSdkVersion', 35)
+    namespace 'expo.modules.dragbinnativecrypto'
+
+    defaultConfig {
+        minSdkVersion safeExtGet('minSdkVersion', 24)
+        targetSdkVersion safeExtGet('targetSdkVersion', 35)
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':expo-modules-core')
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.0'
+
+    // Kyber1024 (round 3, compatible with PQClean / @dragbin/crypto)
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78'
+
+    // Argon2id
+    implementation 'de.mkammerer:argon2-android:2.11'
+}

@@ -9,6 +9,8 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@dragbin/native-crypto": "file:./packages/dragbin-native-crypto",
+    "react-native-quick-crypto": "^0.7.7",
     "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/nunito": "^0.4.2",
     "expo": "~55.0.7",
