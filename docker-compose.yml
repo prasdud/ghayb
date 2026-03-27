@@ -1,0 +1,32 @@
+services:
+  api:
+    build: ./server
+    ports:
+      - "8551:8551"
+    environment:
+      PORT: "8551"
+      DATABASE_URL: postgres://ghayb:${DB_PASSWORD}@db:5432/ghayb
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "127.0.0.1:8552:5432"  # localhost only — not exposed to internet
+    environment:
+      POSTGRES_DB: ghayb
+      POSTGRES_USER: ghayb
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghayb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
