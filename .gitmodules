@@ -1,3 +1,0 @@
-[submodule "packages/dragbin-crypto"]
-	path = packages/dragbin-crypto
-	url = https://github.com/prasdud/dragbin-crypto
