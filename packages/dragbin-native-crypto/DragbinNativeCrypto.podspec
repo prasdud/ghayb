@@ -12,18 +12,17 @@ Pod::Spec.new do |s|
   s.platforms      = { :ios => '16.0' }
   s.source         = { :git => '' }
 
-  # Swift + ObjC bridge
+  # Swift + ObjC bridge + vendored C source (downloaded by `node scripts/setup.js`)
   s.source_files = [
     'ios/*.{swift,h,m,c}',
-    'ios/pqclean/crypto_kem/kyber1024/clean/*.{c,h}',
-    'ios/pqclean/common/randombytes.h',
+    'ios/kyber_ref/*.{c,h}',
     'ios/argon2ref/include/argon2.h',
     'ios/argon2ref/src/*.{c,h}',
     'ios/argon2ref/src/blake2/*.{c,h}',
   ]
 
   s.private_header_files = [
-    'ios/pqclean/crypto_kem/kyber1024/clean/*.h',
+    'ios/kyber_ref/*.h',
     'ios/argon2ref/src/*.h',
     'ios/argon2ref/src/blake2/*.h',
   ]
@@ -36,12 +35,12 @@ Pod::Spec.new do |s|
 
   s.pod_target_xcconfig = {
     'HEADER_SEARCH_PATHS' => [
-      '"$(PODS_TARGET_SRCROOT)/ios/pqclean/common"',
-      '"$(PODS_TARGET_SRCROOT)/ios/pqclean/crypto_kem/kyber1024/clean"',
+      '"$(PODS_TARGET_SRCROOT)/ios/kyber_ref"',
       '"$(PODS_TARGET_SRCROOT)/ios/argon2ref/include"',
       '"$(PODS_TARGET_SRCROOT)/ios/argon2ref/src"',
     ].join(' '),
-    'GCC_PREPROCESSOR_DEFINITIONS' => 'ARGON2_NO_THREADS=1',
+    # KYBER_K=4 selects kyber1024 in the pq-crystals reference implementation
+    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) KYBER_K=4 ARGON2_NO_THREADS=1',
   }
 
   s.dependency 'ExpoModulesCore'

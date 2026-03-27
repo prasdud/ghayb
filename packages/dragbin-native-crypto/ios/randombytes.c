@@ -1,6 +1,6 @@
 /**
- * iOS implementation of PQClean randombytes using SecRandomCopyBytes.
- * Replaces the libsodium randombytes used in the original kyber-crystals build.
+ * iOS implementation of randombytes using SecRandomCopyBytes.
+ * Satisfies the randombytes() symbol required by pq-crystals/kyber ref.
  */
 #include "randombytes.h"
 #include <Security/Security.h>

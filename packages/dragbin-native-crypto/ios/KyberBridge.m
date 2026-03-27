@@ -1,7 +1,9 @@
 #import "KyberBridge.h"
 
-// PQClean Kyber1024 clean API — files downloaded by `node scripts/setup.js`
+// pq-crystals/kyber ref API — files downloaded by `node scripts/setup.js`
+// Compiled with -DKYBER_K=4 (podspec) to select kyber1024
 #include "api.h"
+#include "kem.h"
 
 static NSError *kyberError(NSInteger code, NSString *message) {
     return [NSError errorWithDomain:@"DragbinNativeCrypto.Kyber"
@@ -12,10 +14,10 @@ static NSError *kyberError(NSInteger code, NSString *message) {
 @implementation KyberBridge
 
 + (nullable NSDictionary<NSString *, NSString *> *)generateKeyPairWithError:(NSError **)error {
-    uint8_t pk[PQCLEAN_KYBER1024_CLEAN_CRYPTO_PUBLICKEYBYTES];
-    uint8_t sk[PQCLEAN_KYBER1024_CLEAN_CRYPTO_SECRETKEYBYTES];
+    uint8_t pk[CRYPTO_PUBLICKEYBYTES];
+    uint8_t sk[CRYPTO_SECRETKEYBYTES];
 
-    int rc = PQCLEAN_KYBER1024_CLEAN_crypto_kem_keypair(pk, sk);
+    int rc = crypto_kem_keypair(pk, sk);
     if (rc != 0) {
         if (error) *error = kyberError(1, @"Kyber keypair generation failed");
         return nil;
@@ -30,15 +32,15 @@ static NSError *kyberError(NSInteger code, NSString *message) {
 + (nullable NSDictionary<NSString *, NSString *> *)encapsulate:(NSString *)publicKeyB64
                                                           error:(NSError **)error {
     NSData *pkData = [[NSData alloc] initWithBase64EncodedString:publicKeyB64 options:0];
-    if (!pkData || pkData.length != PQCLEAN_KYBER1024_CLEAN_CRYPTO_PUBLICKEYBYTES) {
+    if (!pkData || pkData.length != CRYPTO_PUBLICKEYBYTES) {
         if (error) *error = kyberError(2, @"Invalid Kyber public key — expected 1568 bytes");
         return nil;
     }
 
-    uint8_t ct[PQCLEAN_KYBER1024_CLEAN_CRYPTO_CIPHERTEXTBYTES];
-    uint8_t ss[PQCLEAN_KYBER1024_CLEAN_CRYPTO_BYTES];
+    uint8_t ct[CRYPTO_CIPHERTEXTBYTES];
+    uint8_t ss[CRYPTO_BYTES];
 
-    int rc = PQCLEAN_KYBER1024_CLEAN_crypto_kem_enc(ct, ss, (const uint8_t *)pkData.bytes);
+    int rc = crypto_kem_enc(ct, ss, (const uint8_t *)pkData.bytes);
     if (rc != 0) {
         if (error) *error = kyberError(3, @"Kyber encapsulation failed");
         return nil;
@@ -56,18 +58,18 @@ static NSError *kyberError(NSInteger code, NSString *message) {
     NSData *ctData = [[NSData alloc] initWithBase64EncodedString:ciphertextB64 options:0];
     NSData *skData = [[NSData alloc] initWithBase64EncodedString:privateKeyB64 options:0];
 
-    if (!ctData || ctData.length != PQCLEAN_KYBER1024_CLEAN_CRYPTO_CIPHERTEXTBYTES) {
+    if (!ctData || ctData.length != CRYPTO_CIPHERTEXTBYTES) {
         if (error) *error = kyberError(4, @"Invalid Kyber ciphertext — expected 1568 bytes");
         return nil;
     }
-    if (!skData || skData.length != PQCLEAN_KYBER1024_CLEAN_CRYPTO_SECRETKEYBYTES) {
+    if (!skData || skData.length != CRYPTO_SECRETKEYBYTES) {
         if (error) *error = kyberError(5, @"Invalid Kyber private key — expected 3168 bytes");
         return nil;
     }
 
-    uint8_t ss[PQCLEAN_KYBER1024_CLEAN_CRYPTO_BYTES];
+    uint8_t ss[CRYPTO_BYTES];
 
-    int rc = PQCLEAN_KYBER1024_CLEAN_crypto_kem_dec(
+    int rc = crypto_kem_dec(
         ss,
         (const uint8_t *)ctData.bytes,
         (const uint8_t *)skData.bytes
