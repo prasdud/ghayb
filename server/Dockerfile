@@ -5,8 +5,9 @@ COPY package.json bun.lockb* ./
 RUN bun install --frozen-lockfile
 
 COPY src ./src
-COPY tsconfig.json ./
+COPY drizzle ./drizzle
+COPY tsconfig.json drizzle.config.ts ./
 
 ENV NODE_ENV=production
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["sh", "-c", "bun run src/db/migrate.ts && bun run src/index.ts"]
