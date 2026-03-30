@@ -39,21 +39,27 @@ export default function ChatScreen() {
                 });
                 if (!res.ok) return;
 
-                const raw: { id: string; senderId: string; encryptedData: string; kyberEncryptedSessionKey: string; createdAt: string }[] = await res.json();
+                const raw: { id: string; senderId: string; encryptedData: string; kyberEncryptedSessionKey: string; senderWrappedKey: string | null; createdAt: string }[] = await res.json();
 
                 const decrypted: Message[] = await Promise.all(
                     raw.map(async (m) => {
+                        const isMine = m.senderId === session.userId;
+                        // Use sender's wrapped key for own messages, recipient's for incoming
+                        const wrappedKeyB64 = isMine ? m.senderWrappedKey : m.kyberEncryptedSessionKey;
+                        if (!wrappedKeyB64) {
+                            return { id: m.id, senderId: m.senderId, text: '[no sender copy]', time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+                        }
                         try {
                             const text = await decryptMessage(
                                 {
                                     encryptedData: importBytes(m.encryptedData),
-                                    kyberEncryptedSessionKey: importBytes(m.kyberEncryptedSessionKey),
+                                    wrappedKey: importBytes(wrappedKeyB64),
                                 },
                                 session.privateKey,
                             );
                             return { id: m.id, senderId: m.senderId, text, time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
                         } catch {
-                            return { id: m.id, senderId: m.senderId, text: '[decryption failed]', time: '' };
+                            return { id: m.id, senderId: m.senderId, text: '[decryption failed]', time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
                         }
                     }),
                 );
@@ -76,7 +82,11 @@ export default function ChatScreen() {
         setSending(true);
         try {
             const recipientPublicKey = importBytes(publicKeyB64);
-            const { encryptedData, kyberEncryptedSessionKey } = await encryptMessage(text, recipientPublicKey);
+            const { encryptedData, recipientWrappedKey, senderWrappedKey } = await encryptMessage(
+                text,
+                recipientPublicKey,
+                session.publicKey,
+            );
 
             const res = await fetch(`${API_BASE}/messages`, {
                 method: 'POST',
@@ -87,7 +97,8 @@ export default function ChatScreen() {
                 body: JSON.stringify({
                     recipientId,
                     encryptedData: exportBytes(encryptedData),
-                    kyberEncryptedSessionKey: exportBytes(kyberEncryptedSessionKey),
+                    kyberEncryptedSessionKey: exportBytes(recipientWrappedKey),
+                    senderWrappedKey: exportBytes(senderWrappedKey),
                 }),
             });
 
