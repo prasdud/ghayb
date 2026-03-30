@@ -27,7 +27,8 @@ export const messages = pgTable('messages', {
     conversationId:           uuid('conversation_id').notNull().references(() => conversations.id),
     senderId:                 uuid('sender_id').notNull().references(() => users.id),
     encryptedData:            text('encrypted_data').notNull(),
-    kyberEncryptedSessionKey: text('kyber_encrypted_session_key').notNull(),
+    kyberEncryptedSessionKey: text('kyber_encrypted_session_key').notNull(), // recipient's wrapped key
+    senderWrappedKey:         text('sender_wrapped_key'),                    // sender's wrapped key (null on pre-migration rows)
     createdAt:                timestamp('created_at').notNull().defaultNow(),
 })
 

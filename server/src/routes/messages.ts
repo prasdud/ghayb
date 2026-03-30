@@ -13,12 +13,13 @@ messagesRouter.post('/', requireAuth, async (c) => {
     const body = await c.req.json<{
         recipientId: string
         encryptedData: string
-        kyberEncryptedSessionKey: string
+        kyberEncryptedSessionKey: string  // recipient's wrapped key
+        senderWrappedKey: string          // sender's wrapped key
     }>()
 
-    const { recipientId, encryptedData, kyberEncryptedSessionKey } = body
+    const { recipientId, encryptedData, kyberEncryptedSessionKey, senderWrappedKey } = body
 
-    if (!recipientId || !encryptedData || !kyberEncryptedSessionKey) {
+    if (!recipientId || !encryptedData || !kyberEncryptedSessionKey || !senderWrappedKey) {
         return c.json({ error: 'Missing fields' }, 400)
     }
 
@@ -52,6 +53,7 @@ messagesRouter.post('/', requireAuth, async (c) => {
         senderId,
         encryptedData,
         kyberEncryptedSessionKey,
+        senderWrappedKey,
     }).returning()
 
     return c.json({ id: message.id, conversationId: conversation.id }, 201)
@@ -85,6 +87,7 @@ messagesRouter.get('/', requireAuth, async (c) => {
             senderId: true,
             encryptedData: true,
             kyberEncryptedSessionKey: true,
+            senderWrappedKey: true,
             createdAt: true,
         },
         orderBy: (m, { asc }) => [asc(m.createdAt)],
