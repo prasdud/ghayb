@@ -13,7 +13,7 @@ export const requireAuth = createMiddleware<{
 
     const token = header.slice(7)
     try {
-        const payload = await verify(token, process.env.JWT_SECRET!) as JwtPayload
+        const payload = await verify(token, process.env.JWT_SECRET!, 'HS256') as JwtPayload
         c.set('userId', payload.userId)
     } catch {
         return c.json({ error: 'Unauthorized' }, 401)

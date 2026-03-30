@@ -28,24 +28,27 @@ export default function ChatScreen() {
     const [sending, setSending] = useState(false);
     const scrollRef = useRef<ScrollView>(null);
 
-    // On mount, discover existing conversationId
+    // Single poll loop: discover conversationId if missing, then fetch messages.
+    // Runs every 3s so the recipient's screen updates when the sender initiates.
     useEffect(() => {
         if (!session || !recipientId) return;
-        fetch(`${API_BASE}/conversations?otherUserId=${recipientId}`, {
-            headers: { Authorization: `Bearer ${session.token}` },
-        })
-            .then(r => r.json())
-            .then(({ conversationId: cid }) => { if (cid) setConversationId(cid); })
-            .catch(() => {});
-    }, [session?.userId, recipientId]);
-
-    // Poll for messages every 3 seconds once we have a conversationId
-    useEffect(() => {
-        if (!conversationId || !session) return;
 
         const poll = async () => {
             try {
-                const res = await fetch(`${API_BASE}/messages?conversationId=${conversationId}`, {
+                let convId = conversationId;
+
+                if (!convId) {
+                    const r = await fetch(`${API_BASE}/conversations?otherUserId=${recipientId}`, {
+                        headers: { Authorization: `Bearer ${session.token}` },
+                    });
+                    if (!r.ok) return;
+                    const { conversationId: cid } = await r.json();
+                    if (!cid) return; // no conversation yet — try again next tick
+                    setConversationId(cid);
+                    convId = cid;
+                }
+
+                const res = await fetch(`${API_BASE}/messages?conversationId=${convId}`, {
                     headers: { Authorization: `Bearer ${session.token}` },
                 });
                 if (!res.ok) return;
@@ -55,7 +58,6 @@ export default function ChatScreen() {
                 const decrypted: Message[] = await Promise.all(
                     raw.map(async (m) => {
                         const isMine = m.senderId === session.userId;
-                        // Use sender's wrapped key for own messages, recipient's for incoming
                         const wrappedKeyB64 = isMine ? m.senderWrappedKey : m.kyberEncryptedSessionKey;
                         if (!wrappedKeyB64) {
                             return { id: m.id, senderId: m.senderId, text: '[no sender copy]', time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
@@ -84,7 +86,7 @@ export default function ChatScreen() {
         poll();
         const interval = setInterval(poll, 3000);
         return () => clearInterval(interval);
-    }, [conversationId, session]);
+    }, [session?.userId, recipientId]);
 
     const handleSend = async () => {
         const text = inputText.trim();
