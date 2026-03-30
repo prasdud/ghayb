@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import {
     decryptPrivateKey,
@@ -21,10 +21,12 @@ export default function SignInScreen() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleSignIn = async () => {
+        setError('');
         if (!username.trim() || !password) {
-            Alert.alert('Error', 'Username and password are required');
+            setError('Username and password are required');
             return;
         }
 
@@ -33,14 +35,13 @@ export default function SignInScreen() {
             // 1. Fetch salts for this username
             const saltsRes = await fetch(`${API_BASE}/auth/salts?username=${encodeURIComponent(username.trim())}`);
             if (!saltsRes.ok) {
-                Alert.alert('Error', 'Failed to reach server');
+                setError('Failed to reach server');
                 return;
             }
             const { authSalt, vaultSalt } = await saltsRes.json();
 
-            // authSalt null means username not found — return generic error to prevent enumeration
             if (!authSalt) {
-                Alert.alert('Error', 'Invalid credentials');
+                setError('Invalid credentials');
                 return;
             }
 
@@ -56,14 +57,13 @@ export default function SignInScreen() {
             });
 
             if (!loginRes.ok) {
-                Alert.alert('Error', 'Invalid credentials');
+                setError('Invalid credentials');
                 return;
             }
 
             const { userId, vault, publicKey: publicKeyB64, token } = await loginRes.json();
 
             // 4. Decrypt vault → privateKey
-            // vault format: [IV 12 bytes][AES-GCM ciphertext]
             const vaultBytes = importBytes(vault);
             const iv = vaultBytes.slice(0, 12);
             const encryptedPrivateKey = vaultBytes.slice(12);
@@ -73,7 +73,6 @@ export default function SignInScreen() {
             // 5. Create session and navigate
             setSession({ userId, username: username.trim(), publicKey, privateKey, token });
 
-            // Register push token if notifications were previously enabled
             const notifEnabled = await getNotificationsEnabled();
             if (notifEnabled) {
                 registerPushToken(token).catch(() => {});
@@ -81,7 +80,8 @@ export default function SignInScreen() {
 
             router.replace('/(main)');
         } catch (e: any) {
-            Alert.alert('Error', e?.message ?? 'Something went wrong');
+            console.error('[signin] error:', e);
+            setError(e?.message ?? 'Something went wrong');
         } finally {
             setLoading(false);
         }
@@ -118,6 +118,10 @@ export default function SignInScreen() {
                                 onChangeText={setPassword}
                             />
                         </View>
+
+                        {error ? (
+                            <Text className="font-sans text-sm text-destructive mb-4 text-center">{error}</Text>
+                        ) : null}
 
                         <Button label={loading ? 'Signing in…' : 'Sign In'} onPress={handleSignIn} disabled={loading} className="w-full mb-4" />
 
