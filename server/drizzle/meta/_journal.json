@@ -15,6 +15,34 @@
       "when": 1774621096394,
       "tag": "0001_green_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774630000000,
+      "tag": "0002_sender_wrapped_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774631000000,
+      "tag": "0003_encrypted_contacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774632000000,
+      "tag": "0004_recovery_vault_salt",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774633000000,
+      "tag": "0005_device_tokens",
+      "breakpoints": true
     }
   ]
 }
