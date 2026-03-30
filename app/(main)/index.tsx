@@ -58,13 +58,13 @@ export default function ChatListScreen() {
     };
 
     const handleSendRequest = async () => {
-        const target = uauid.trim().toLowerCase();
+        const target = uauid.trim();
         if (!target) return;
         if (!session) {
             Alert.alert('Error', 'Not signed in');
             return;
         }
-        if (target === session.username) {
+        if (target.toLowerCase() === session.username.toLowerCase()) {
             setStatus('error');
             setErrorMsg('You cannot connect to yourself.');
             return;
@@ -81,6 +81,11 @@ export default function ChatListScreen() {
                 headers: { Authorization: `Bearer ${session.token}` },
             });
 
+            if (res.status === 401) {
+                setStatus('error');
+                setErrorMsg('Session expired. Please sign in again.');
+                return;
+            }
             if (!res.ok) {
                 setStatus('error');
                 setErrorMsg('This user does not exist on the network.');

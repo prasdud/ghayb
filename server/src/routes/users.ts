@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { users } from '../db/schema'
 import { requireAuth } from '../middleware/auth'
@@ -30,7 +30,7 @@ usersRouter.get('/:username', requireAuth, async (c) => {
     const username = c.req.param('username')
 
     const user = await db.query.users.findFirst({
-        where: eq(users.username, username),
+        where: sql`lower(${users.username}) = lower(${username})`,
         columns: { id: true, username: true, publicKey: true },
     })
 
