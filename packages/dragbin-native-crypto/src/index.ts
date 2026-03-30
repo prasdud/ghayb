@@ -38,61 +38,101 @@ export async function generateKeyPair(): Promise<{ publicKey: Uint8Array; privat
     };
 }
 
-// ── Message encryption ─────────────────────────────────────────────────────
-// Matches @dragbin/crypto message.ts exactly:
-//   Kyber encapsulate → raw 32-byte secret used directly as AES-GCM key
-//   Format: [IV 12 bytes][AES-GCM ciphertext]
+// ── Message encryption (double-wrap) ───────────────────────────────────────
+//
+// Blob format for recipientWrappedKey / senderWrappedKey:
+//   [Kyber ciphertext: 1568 bytes][IV: 12 bytes][AES-GCM(K): 48 bytes]
+//
+// encryptedData format: [IV: 12 bytes][AES-GCM(message)]
+//
+// Flow:
+//   1. encapsulate(recipientPK) → { kyberCT_r, secret_r }
+//   2. encapsulate(senderPK)    → { kyberCT_s, secret_s }
+//   3. random 32-byte session key K
+//   4. AES-GCM-encrypt(K, key=secret_r) → wrappedK_r
+//   5. AES-GCM-encrypt(K, key=secret_s) → wrappedK_s
+//   6. AES-GCM-encrypt(message, key=K)  → encryptedData
+
+async function wrapSessionKey(sessionKeyBytes: Uint8Array, kekSecret: Uint8Array): Promise<Uint8Array> {
+    const kek = await crypto.subtle.importKey('raw', kekSecret, { name: 'AES-GCM' }, false, ['encrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const wrapped = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kek, sessionKeyBytes);
+    const blob = new Uint8Array(12 + wrapped.byteLength);
+    blob.set(iv, 0);
+    blob.set(new Uint8Array(wrapped), 12);
+    return blob;
+}
+
+async function unwrapSessionKey(wrappedBlob: Uint8Array, kekSecret: Uint8Array): Promise<CryptoKey> {
+    const kek = await crypto.subtle.importKey('raw', kekSecret, { name: 'AES-GCM' }, false, ['decrypt']);
+    const iv = wrappedBlob.subarray(0, 12);
+    const wrapped = wrappedBlob.subarray(12);
+    const keyBytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, kek, wrapped);
+    return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+}
 
 export async function encryptMessage(
     message: string,
-    publicKey: Uint8Array,
-): Promise<{ encryptedData: Uint8Array; kyberEncryptedSessionKey: Uint8Array }> {
-    const { ciphertext, secret } = await Native.encapsulate(bytesToB64(publicKey));
+    recipientPublicKey: Uint8Array,
+    senderPublicKey: Uint8Array,
+): Promise<{ encryptedData: Uint8Array; recipientWrappedKey: Uint8Array; senderWrappedKey: Uint8Array }> {
+    // Kyber encapsulate for both parties
+    const [{ ciphertext: kyberCT_r, secret: secret_r }, { ciphertext: kyberCT_s, secret: secret_s }] =
+        await Promise.all([
+            Native.encapsulate(bytesToB64(recipientPublicKey)) as Promise<{ ciphertext: string; secret: string }>,
+            Native.encapsulate(bytesToB64(senderPublicKey)) as Promise<{ ciphertext: string; secret: string }>,
+        ]);
 
-    const sessionKey = await crypto.subtle.importKey(
-        'raw',
-        b64ToBytes(secret),
-        { name: 'AES-GCM' },
-        false,
-        ['encrypt'],
-    );
+    // Random session key K
+    const sessionKeyBytes = crypto.getRandomValues(new Uint8Array(32));
 
+    // Wrap K for each party using their Kyber-derived secret as KEK
+    const [wrappedK_r, wrappedK_s] = await Promise.all([
+        wrapSessionKey(sessionKeyBytes, b64ToBytes(secret_r)),
+        wrapSessionKey(sessionKeyBytes, b64ToBytes(secret_s)),
+    ]);
+
+    // Build wrapped key blobs: [kyberCT (1568 bytes)][IV+wrappedK (60 bytes)]
+    const recipientWrappedKey = new Uint8Array(b64ToBytes(kyberCT_r).length + wrappedK_r.length);
+    recipientWrappedKey.set(b64ToBytes(kyberCT_r), 0);
+    recipientWrappedKey.set(wrappedK_r, b64ToBytes(kyberCT_r).length);
+
+    const senderWrappedKey = new Uint8Array(b64ToBytes(kyberCT_s).length + wrappedK_s.length);
+    senderWrappedKey.set(b64ToBytes(kyberCT_s), 0);
+    senderWrappedKey.set(wrappedK_s, b64ToBytes(kyberCT_s).length);
+
+    // Encrypt message with K
+    const sessionKey = await crypto.subtle.importKey('raw', sessionKeyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        sessionKey,
-        new TextEncoder().encode(message),
-    );
+    const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sessionKey, new TextEncoder().encode(message));
 
     const encryptedData = new Uint8Array(12 + encrypted.byteLength);
     encryptedData.set(iv, 0);
     encryptedData.set(new Uint8Array(encrypted), 12);
 
-    return {
-        encryptedData,
-        kyberEncryptedSessionKey: b64ToBytes(ciphertext),
-    };
+    return { encryptedData, recipientWrappedKey, senderWrappedKey };
 }
 
+// Kyber ciphertext for Kyber1024 is 1568 bytes
+const KYBER_CT_BYTES = 1568;
+
 export async function decryptMessage(
-    encryptedMessage: { encryptedData: Uint8Array; kyberEncryptedSessionKey: Uint8Array },
+    encryptedMessage: { encryptedData: Uint8Array; wrappedKey: Uint8Array },
     privateKey: Uint8Array,
 ): Promise<string> {
-    const { encryptedData, kyberEncryptedSessionKey } = encryptedMessage;
+    const { encryptedData, wrappedKey } = encryptedMessage;
 
-    const secretB64: string = await Native.decapsulate(
-        bytesToB64(kyberEncryptedSessionKey),
-        bytesToB64(privateKey),
-    );
+    // Split blob into Kyber ciphertext and wrapped K
+    const kyberCT = wrappedKey.subarray(0, KYBER_CT_BYTES);
+    const wrappedK = wrappedKey.subarray(KYBER_CT_BYTES);
 
-    const sessionKey = await crypto.subtle.importKey(
-        'raw',
-        b64ToBytes(secretB64),
-        { name: 'AES-GCM' },
-        false,
-        ['decrypt'],
-    );
+    // Kyber decapsulate → secret (KEK)
+    const secretB64: string = await Native.decapsulate(bytesToB64(kyberCT), bytesToB64(privateKey));
 
+    // Unwrap session key K
+    const sessionKey = await unwrapSessionKey(wrappedK, b64ToBytes(secretB64));
+
+    // Decrypt message
     const decrypted = await crypto.subtle.decrypt(
         { name: 'AES-GCM', iv: encryptedData.subarray(0, 12) },
         sessionKey,
