@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, Pressable, Modal, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Plus, X, MoreVertical } from 'lucide-react-native';
@@ -8,12 +8,7 @@ import { Input } from '../../components/Input';
 import { Card } from '../../components/Card';
 import { useSession } from '../context/SessionContext';
 import { API_BASE } from '../lib/api';
-
-interface Contact {
-    id: string
-    username: string
-    publicKey: string // base64
-}
+import { Contact, fetchAndDecryptContacts, encryptAndSaveContacts } from '../lib/contacts';
 
 export default function ChatListScreen() {
     const router = useRouter();
@@ -24,6 +19,14 @@ export default function ChatListScreen() {
     const [uauid, setUauid] = useState('');
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState('');
+
+    // Load contacts from server on mount
+    useEffect(() => {
+        if (!session) return;
+        fetchAndDecryptContacts(session.token, session.privateKey)
+            .then(setContacts)
+            .catch(() => {}); // non-fatal — empty list on failure
+    }, [session?.userId]); // re-run only on user change, not every render
 
     const handleOpenChat = (contact: Contact) => {
         router.push({
@@ -85,7 +88,11 @@ export default function ChatListScreen() {
             }
 
             const { id, username, publicKey } = await res.json();
-            setContacts(prev => [...prev, { id, username, publicKey }]);
+            const newContacts = [...contacts, { id, username, publicKey }];
+
+            // Update state and persist encrypted blob to server
+            setContacts(newContacts);
+            await encryptAndSaveContacts(newContacts, session.token, session.privateKey);
             setStatus('success');
         } catch {
             setStatus('error');
