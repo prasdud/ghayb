@@ -204,8 +204,19 @@ export async function decryptPrivateKey(
 // Blob format: [IV 12 bytes][AES-GCM ciphertext]
 
 async function privateKeyToCryptoKey(privateKey: Uint8Array, usage: 'encrypt' | 'decrypt'): Promise<CryptoKey> {
-    const keyBytes = await crypto.subtle.digest('SHA-256', privateKey);
-    return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, [usage]);
+    const keyMaterial = await crypto.subtle.importKey('raw', privateKey, 'HKDF', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+        {
+            name: 'HKDF',
+            salt: new Uint8Array(0),
+            info: new TextEncoder().encode('dragbin-contacts-key'),
+            hash: 'SHA-256',
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        [usage],
+    );
 }
 
 export async function encryptBlob(data: unknown, privateKey: Uint8Array): Promise<string> {
