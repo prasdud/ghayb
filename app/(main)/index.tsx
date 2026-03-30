@@ -1,52 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, FlatList, Pressable, Modal, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Plus, X, MoreVertical } from 'lucide-react-native';
 import { BlobBackground } from '../../components/BlobBackground';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Card } from '../../components/Card';
+import { useSession } from '../context/SessionContext';
+import { API_BASE } from '../lib/api';
 
-const DUMMY_CHATS = [
-    { id: '1', name: 'cipher_wolf', lastMessage: 'The package is secured.', time: '10:42 AM', unread: 2 },
-    { id: '2', name: 'echo_base', lastMessage: 'Meeting at the coordinates.', time: 'Yesterday', unread: 0 },
-    { id: '3', name: 'shadow_ghost', lastMessage: 'Understood.', time: 'Tuesday', unread: 0 },
-];
+interface Contact {
+    id: string
+    username: string
+    publicKey: string // base64
+}
 
 export default function ChatListScreen() {
     const router = useRouter();
+    const { session, clearSession } = useSession();
+    const [contacts, setContacts] = useState<Contact[]>([]);
     const [isOverlayVisible, setOverlayVisible] = useState(false);
     const [isMenuVisible, setMenuVisible] = useState(false);
     const [uauid, setUauid] = useState('');
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-    const [progress, setProgress] = useState(0);
+    const [errorMsg, setErrorMsg] = useState('');
 
-    const handleOpenChat = (id: string, name: string) => {
-        router.push({ pathname: '/(main)/chat/[id]', params: { id, name } });
+    const handleOpenChat = (contact: Contact) => {
+        router.push({
+            pathname: '/(main)/chat/[id]',
+            params: { id: contact.id, name: contact.username, publicKey: contact.publicKey },
+        });
     };
 
-    const renderItem = ({ item }: { item: typeof DUMMY_CHATS[0] }) => (
+    const renderItem = ({ item }: { item: Contact }) => (
         <Pressable
-            onPress={() => handleOpenChat(item.id, item.name)}
+            onPress={() => handleOpenChat(item)}
             className="flex-row items-center p-4 mb-4 bg-white/60 rounded-[2rem] border border-timber/30 shadow-[0_4px_20px_-2px_rgba(93,112,82,0.05)]"
         >
             <View className="w-14 h-14 rounded-[2rem] bg-moss/20 flex items-center justify-center mr-4">
-                <Text className="font-serif text-xl font-bold text-moss">{item.name.charAt(0).toUpperCase()}</Text>
+                <Text className="font-serif text-xl font-bold text-moss">{item.username.charAt(0).toUpperCase()}</Text>
             </View>
             <View className="flex-1">
-                <View className="flex-row justify-between items-center mb-1">
-                    <Text className="font-serif font-bold text-lg text-foreground">{item.name}</Text>
-                    <Text className="font-sans text-xs text-muted-foreground">{item.time}</Text>
-                </View>
-                <Text className="font-sans text-sm text-foreground/80" numberOfLines={1}>
-                    {item.lastMessage}
-                </Text>
+                <Text className="font-serif font-bold text-lg text-foreground">{item.username}</Text>
+                <Text className="font-sans text-xs text-moss font-bold mt-0.5">E2EE Active</Text>
             </View>
-            {item.unread > 0 && (
-                <View className="ml-3 bg-moss px-3 py-1 rounded-full">
-                    <Text className="font-sans text-xs text-primary-foreground font-bold">{item.unread}</Text>
-                </View>
-            )}
         </Pressable>
     );
 
@@ -54,40 +51,51 @@ export default function ChatListScreen() {
         setOverlayVisible(true);
         setUauid('');
         setStatus('idle');
-        setProgress(0);
+        setErrorMsg('');
     };
 
-    const handleCloseOverlay = () => {
-        setOverlayVisible(false);
-    };
-
-    useEffect(() => {
-        if (status === 'loading') {
-            const interval = setInterval(() => {
-                setProgress(p => (p < 85 ? p + 15 : p));
-            }, 200);
-            return () => clearInterval(interval);
+    const handleSendRequest = async () => {
+        const target = uauid.trim().toLowerCase();
+        if (!target) return;
+        if (!session) {
+            Alert.alert('Error', 'Not signed in');
+            return;
         }
-    }, [status]);
+        if (target === session.username) {
+            setStatus('error');
+            setErrorMsg('You cannot connect to yourself.');
+            return;
+        }
+        if (contacts.find(c => c.username === target)) {
+            setStatus('error');
+            setErrorMsg('Already connected to this user.');
+            return;
+        }
 
-    const handleSendRequest = () => {
-        if (!uauid.trim()) return;
         setStatus('loading');
-        setProgress(10);
+        try {
+            const res = await fetch(`${API_BASE}/users/${encodeURIComponent(target)}`, {
+                headers: { Authorization: `Bearer ${session.token}` },
+            });
 
-        setTimeout(() => {
-            setProgress(100);
-            setTimeout(() => {
-                const id = uauid.trim().toLowerCase();
-                if (id === 'abdul') {
-                    setStatus('error');
-                } else if (id === 'prasdud') {
-                    setStatus('success');
-                } else {
-                    setStatus('error');
-                }
-            }, 300);
-        }, 1500);
+            if (!res.ok) {
+                setStatus('error');
+                setErrorMsg('This user does not exist on the network.');
+                return;
+            }
+
+            const { id, username, publicKey } = await res.json();
+            setContacts(prev => [...prev, { id, username, publicKey }]);
+            setStatus('success');
+        } catch {
+            setStatus('error');
+            setErrorMsg('Failed to reach server.');
+        }
+    };
+
+    const handleLockIdentity = () => {
+        clearSession();
+        router.replace('/signin');
     };
 
     return (
@@ -104,7 +112,6 @@ export default function ChatListScreen() {
                     <MoreVertical color="#2C2C24" size={20} />
                 </Pressable>
 
-                {/* Dropdown Menu Modal */}
                 <Modal visible={isMenuVisible} transparent animationType="fade">
                     <Pressable
                         className="flex-1 bg-[#2C2C24]/10 backdrop-blur-sm"
@@ -112,19 +119,13 @@ export default function ChatListScreen() {
                     >
                         <View className="absolute top-28 right-6 w-48 bg-[#FEFEFA] rounded-[1.5rem] border border-timber/40 shadow-[0_10px_40px_-5px_rgba(93,112,82,0.2)] overflow-hidden">
                             <Pressable
-                                onPress={() => { setMenuVisible(false); }}
-                                className="p-4 border-b border-timber/20 active:bg-moss/10"
-                            >
-                                <Text className="font-sans text-sm font-bold text-foreground">Sync Network</Text>
-                            </Pressable>
-                            <Pressable
                                 onPress={() => { setMenuVisible(false); router.push('/(main)/settings'); }}
                                 className="p-4 border-b border-timber/20 active:bg-moss/10"
                             >
                                 <Text className="font-sans text-sm font-bold text-foreground">Settings</Text>
                             </Pressable>
                             <Pressable
-                                onPress={() => { setMenuVisible(false); router.replace('/signin'); }}
+                                onPress={() => { setMenuVisible(false); handleLockIdentity(); }}
                                 className="p-4 active:bg-destructive/10"
                             >
                                 <Text className="font-sans text-sm font-bold text-destructive">Lock Identity</Text>
@@ -136,10 +137,16 @@ export default function ChatListScreen() {
 
             {/* Chat List */}
             <FlatList
-                data={DUMMY_CHATS}
+                data={contacts}
                 keyExtractor={item => item.id}
                 renderItem={renderItem}
-                contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100 }}
+                ListEmptyComponent={
+                    <View className="flex-1 items-center justify-center mt-24 px-8">
+                        <Text className="font-serif text-2xl font-bold text-foreground/40 text-center">No connections yet.</Text>
+                        <Text className="font-sans text-sm text-muted-foreground text-center mt-2">Tap + to connect with someone.</Text>
+                    </View>
+                }
+                contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100, flexGrow: 1 }}
                 showsVerticalScrollIndicator={false}
             />
 
@@ -159,7 +166,7 @@ export default function ChatListScreen() {
                 >
                     <Card className="w-full max-w-sm relative shadow-[0_20px_40px_-10px_rgba(44,44,36,0.3)]">
                         <Pressable
-                            onPress={handleCloseOverlay}
+                            onPress={() => setOverlayVisible(false)}
                             className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-timber/20 active:bg-timber/40"
                         >
                             <X color="#78786C" size={18} />
@@ -168,12 +175,12 @@ export default function ChatListScreen() {
                         <View className="mt-2 mb-6">
                             <Text className="font-serif text-3xl font-bold text-foreground mb-2">Connect.</Text>
                             <Text className="font-sans text-sm text-muted-foreground leading-relaxed">
-                                Enter a Unique Anonymous User ID (UAUID) to safely establish a secure channel.
+                                Enter a username to establish a secure channel.
                             </Text>
                         </View>
 
                         <View className="mb-4">
-                            <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">Target UAUID</Text>
+                            <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">Username</Text>
                             <Input
                                 placeholder="e.g. echo_base"
                                 value={uauid}
@@ -183,43 +190,25 @@ export default function ChatListScreen() {
                             />
                         </View>
 
-                        {status === 'loading' && (
-                            <View className="mb-6">
-                                <View className="flex-row justify-between items-center mb-2 px-1">
-                                    <Text className="font-sans text-xs font-bold text-moss">Generating keys...</Text>
-                                    <Text className="font-sans text-xs text-muted-foreground">{progress}%</Text>
-                                </View>
-                                <View className="h-2 w-full bg-timber/30 rounded-full overflow-hidden">
-                                    <View className="h-full bg-moss rounded-full" style={{ width: `${progress}%`, transitionDuration: '300ms' }} />
-                                </View>
-                            </View>
-                        )}
-
                         {status === 'error' && (
-                            <View className="mb-6 bg-destructive/10 border border-destructive/20 p-4 rounded-[1.5rem]">
-                                <Text className="font-sans text-sm font-bold text-destructive text-center">
-                                    Connection Failed
-                                </Text>
-                                <Text className="font-sans text-xs text-destructive/80 text-center mt-1">
-                                    This user does not exist on the network.
-                                </Text>
+                            <View className="mb-4 bg-destructive/10 border border-destructive/20 p-4 rounded-[1.5rem]">
+                                <Text className="font-sans text-sm font-bold text-destructive text-center">Connection Failed</Text>
+                                <Text className="font-sans text-xs text-destructive/80 text-center mt-1">{errorMsg}</Text>
                             </View>
                         )}
 
                         {status === 'success' && (
-                            <View className="mb-6 bg-moss/10 border border-moss/20 p-4 rounded-[1.5rem]">
-                                <Text className="font-sans text-base font-bold text-moss text-center">
-                                    Success
-                                </Text>
+                            <View className="mb-4 bg-moss/10 border border-moss/20 p-4 rounded-[1.5rem]">
+                                <Text className="font-sans text-base font-bold text-moss text-center">Connected</Text>
                                 <Text className="font-sans text-xs text-moss/80 text-center mt-1">
-                                    Secure connection request sent to "{uauid}".
+                                    Secure channel established with "{uauid}".
                                 </Text>
                             </View>
                         )}
 
                         {status !== 'success' ? (
                             <Button
-                                label={status === 'loading' ? 'Encrypting...' : 'Send Request'}
+                                label={status === 'loading' ? 'Looking up…' : 'Connect'}
                                 onPress={handleSendRequest}
                                 className={`w-full mt-2 ${status === 'loading' ? 'opacity-50' : ''}`}
                                 disabled={status === 'loading'}
@@ -228,7 +217,7 @@ export default function ChatListScreen() {
                         ) : (
                             <Button
                                 label="Done"
-                                onPress={handleCloseOverlay}
+                                onPress={() => setOverlayVisible(false)}
                                 className="w-full mt-2"
                                 variant="outline"
                             />
