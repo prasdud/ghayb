@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, unique } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
     id:         uuid('id').primaryKey().defaultRandom(),
@@ -34,12 +34,21 @@ export const messages = pgTable('messages', {
     createdAt:                timestamp('created_at').notNull().defaultNow(),
 })
 
+export const deviceTokens = pgTable('device_tokens', {
+    id:        uuid('id').primaryKey().defaultRandom(),
+    userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    token:     text('token').notNull().unique(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type User         = typeof users.$inferSelect
 export type Conversation = typeof conversations.$inferSelect
 export type Message      = typeof messages.$inferSelect
+export type DeviceToken  = typeof deviceTokens.$inferSelect
 
 export type NewUser         = typeof users.$inferInsert
 export type NewConversation = typeof conversations.$inferInsert
 export type NewMessage      = typeof messages.$inferInsert
+export type NewDeviceToken  = typeof deviceTokens.$inferInsert

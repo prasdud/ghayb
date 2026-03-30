@@ -15,6 +15,7 @@
     "@expo-google-fonts/nunito": "^0.4.2",
     "expo": "~55.0.7",
     "expo-constants": "~55.0.8",
+    "expo-notifications": "~0.29.0",
     "expo-secure-store": "~14.0.1",
     "expo-font": "^55.0.4",
     "expo-linking": "~55.0.7",

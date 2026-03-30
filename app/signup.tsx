@@ -16,6 +16,7 @@ import { BlobBackground } from '../components/BlobBackground';
 import { Card } from '../components/Card';
 import { useSession } from './context/SessionContext';
 import { API_BASE } from './lib/api';
+import { registerPushToken, setNotificationsEnabled } from './lib/notifications';
 
 export default function SignUpScreen() {
     const router = useRouter();
@@ -105,6 +106,12 @@ export default function SignUpScreen() {
 
             // 8. Create in-memory session and navigate
             setSession({ userId, username: username.trim(), publicKey, privateKey, token });
+
+            // New accounts: attempt to enable notifications by default
+            const registered = await registerPushToken(token).catch(() => false);
+            if (registered) {
+                await setNotificationsEnabled(true);
+            }
 
             // Show recovery key before navigating
             Alert.alert(

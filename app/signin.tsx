@@ -13,6 +13,7 @@ import { BlobBackground } from '../components/BlobBackground';
 import { Card } from '../components/Card';
 import { useSession } from './context/SessionContext';
 import { API_BASE } from './lib/api';
+import { getNotificationsEnabled, registerPushToken } from './lib/notifications';
 
 export default function SignInScreen() {
     const router = useRouter();
@@ -71,6 +72,13 @@ export default function SignInScreen() {
 
             // 5. Create session and navigate
             setSession({ userId, username: username.trim(), publicKey, privateKey, token });
+
+            // Register push token if notifications were previously enabled
+            const notifEnabled = await getNotificationsEnabled();
+            if (notifEnabled) {
+                registerPushToken(token).catch(() => {});
+            }
+
             router.replace('/(main)');
         } catch (e: any) {
             Alert.alert('Error', e?.message ?? 'Something went wrong');

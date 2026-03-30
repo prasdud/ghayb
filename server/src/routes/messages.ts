@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { and, eq, or } from 'drizzle-orm'
 import { db } from '../db'
-import { conversations, messages, users } from '../db/schema'
+import { conversations, messages, users, deviceTokens } from '../db/schema'
 import { requireAuth } from '../middleware/auth'
 
 const messagesRouter = new Hono()
@@ -55,6 +55,9 @@ messagesRouter.post('/', requireAuth, async (c) => {
         kyberEncryptedSessionKey,
         senderWrappedKey,
     }).returning()
+
+    // Send push notification to recipient (fire-and-forget, no E2EE content)
+    sendPushNotifications(recipientId).catch(() => {})
 
     return c.json({ id: message.id, conversationId: conversation.id }, 201)
 })
@@ -112,5 +115,32 @@ messagesRouter.get('/', requireAuth, async (c) => {
 
     return c.json(msgs)
 })
+
+// ── Push notification helper ──────────────────────────────────────────────────
+
+async function sendPushNotifications(recipientId: string) {
+    const tokens = await db.query.deviceTokens.findMany({
+        where: eq(deviceTokens.userId, recipientId),
+        columns: { token: true },
+    })
+
+    if (tokens.length === 0) return
+
+    const messages = tokens.map(({ token }) => ({
+        to: token,
+        title: 'ghayb',
+        body: 'there is a new message in your inbox',
+        sound: 'default',
+    }))
+
+    await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify(messages),
+    })
+}
 
 export default messagesRouter

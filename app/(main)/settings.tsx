@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Key, Lock, Bell, Trash2, Smartphone, RefreshCw } from 'lucide-react-native';
@@ -6,12 +6,38 @@ import { BlobBackground } from '../../components/BlobBackground';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { useSession } from '../context/SessionContext';
+import {
+    getNotificationsEnabled,
+    setNotificationsEnabled,
+    registerPushToken,
+    unregisterPushToken,
+} from '../lib/notifications';
 
 export default function SettingsScreen() {
     const router = useRouter();
     const { session } = useSession();
     const [isLocked, setIsLocked] = useState(true);
     const [hasNotifications, setHasNotifications] = useState(false);
+
+    useEffect(() => {
+        getNotificationsEnabled().then(setHasNotifications);
+    }, []);
+
+    const handleNotificationsToggle = async (enabled: boolean) => {
+        setHasNotifications(enabled);
+        await setNotificationsEnabled(enabled);
+        if (!session?.token) return;
+        if (enabled) {
+            const ok = await registerPushToken(session.token).catch(() => false);
+            if (!ok) {
+                // Permission denied — revert
+                setHasNotifications(false);
+                await setNotificationsEnabled(false);
+            }
+        } else {
+            await unregisterPushToken(session.token).catch(() => {});
+        }
+    };
 
     return (
         <View className="flex-1 bg-background">
@@ -56,7 +82,7 @@ export default function SettingsScreen() {
                 {/* Preferences Section */}
                 <Text className="font-sans text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 ml-2">Preferences</Text>
                 <Card className="mb-6 p-2 rounded-[2rem]">
-                    <SettingRow icon={Bell} title="Notifications" subtitle="Message alerts and sounds" hasSwitch value={hasNotifications} onValueChange={setHasNotifications} />
+                    <SettingRow icon={Bell} title="Notifications" subtitle="Message alerts and sounds" hasSwitch value={hasNotifications} onValueChange={handleNotificationsToggle} />
                     <View className="h-[1px] bg-timber/20 mx-4 my-2" />
                     <SettingRow icon={Smartphone} title="Appearance" subtitle="Following system natural theme" />
                 </Card>
