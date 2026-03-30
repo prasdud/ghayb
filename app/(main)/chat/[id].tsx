@@ -28,6 +28,17 @@ export default function ChatScreen() {
     const [sending, setSending] = useState(false);
     const scrollRef = useRef<ScrollView>(null);
 
+    // On mount, discover existing conversationId
+    useEffect(() => {
+        if (!session || !recipientId) return;
+        fetch(`${API_BASE}/conversations?otherUserId=${recipientId}`, {
+            headers: { Authorization: `Bearer ${session.token}` },
+        })
+            .then(r => r.json())
+            .then(({ conversationId: cid }) => { if (cid) setConversationId(cid); })
+            .catch(() => {});
+    }, [session?.userId, recipientId]);
+
     // Poll for messages every 3 seconds once we have a conversationId
     useEffect(() => {
         if (!conversationId || !session) return;

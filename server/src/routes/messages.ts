@@ -59,6 +59,23 @@ messagesRouter.post('/', requireAuth, async (c) => {
     return c.json({ id: message.id, conversationId: conversation.id }, 201)
 })
 
+// GET /conversations?otherUserId= — find or return null for a conversation between two users
+messagesRouter.get('/conversations', requireAuth, async (c) => {
+    const userId = c.get('userId')
+    const otherUserId = c.req.query('otherUserId')
+
+    if (!otherUserId) return c.json({ error: 'Missing otherUserId' }, 400)
+
+    const [userAId, userBId] = [userId, otherUserId].sort()
+
+    const conversation = await db.query.conversations.findFirst({
+        where: and(eq(conversations.userAId, userAId), eq(conversations.userBId, userBId)),
+        columns: { id: true },
+    })
+
+    return c.json({ conversationId: conversation?.id ?? null })
+})
+
 // GET /messages?conversationId= — fetch encrypted messages for a conversation
 messagesRouter.get('/', requireAuth, async (c) => {
     const userId = c.get('userId')
