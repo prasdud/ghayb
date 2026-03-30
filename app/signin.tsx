@@ -119,6 +119,13 @@ export default function SignInScreen() {
                                 <Text className="font-sans text-moss font-bold text-sm">Create account.</Text>
                             </Link>
                         </View>
+
+                        <View className="flex-row justify-center items-center mt-3">
+                            <Text className="font-sans text-muted-foreground text-sm">Forgot password? </Text>
+                            <Link href="/recover" asChild>
+                                <Text className="font-sans text-moss font-bold text-sm">Recover account.</Text>
+                            </Link>
+                        </View>
                     </Card>
                 </View>
             </View>
