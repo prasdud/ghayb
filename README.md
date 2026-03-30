@@ -4,6 +4,8 @@ Open-source end-to-end encrypted, post-quantum resistant chat. Goodbye WhatsApp.
 
 Built with [dragbin-crypto](https://github.com/mohitsinghdz/dragbin-crypto) — a native C crypto module for React Native (Kyber1024 + Argon2id).
 
+Releasing on Android first via Google Play Store. Will start a GoFundMe soon for a MacBook Pro and a Apple dev account :)
+
 ---
 
 ## How the encryption works
