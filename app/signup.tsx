@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { useRouter, Link } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './lib/secure-store';
 import {
     generateKeyPair,
     encryptPrivateKey,
