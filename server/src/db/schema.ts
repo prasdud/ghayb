@@ -9,6 +9,7 @@ export const users = pgTable('users', {
     vaultSalt:  text('vault_salt').notNull(),
     publicKey:      text('public_key').notNull(),
     recoveryVault:      text('recovery_vault').notNull(),
+    recoveryVaultSalt:  text('recovery_vault_salt').notNull(),
     recoveryHash:       text('recovery_hash').notNull(),
     encryptedContacts:  text('encrypted_contacts'),
     createdAt:          timestamp('created_at').notNull().defaultNow(),

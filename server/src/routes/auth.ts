@@ -39,18 +39,19 @@ const recoverLimiter = rateLimiter({
 auth.post('/register', registerLimiter, async (c) => {
     const body = await c.req.json<{
         username: string
-        authKey: string       // hex — client-derived Argon2id(password, authSalt)
-        authSalt: string      // base64, 16 bytes
-        vault: string         // base64 AES-GCM ciphertext of privateKey
-        vaultSalt: string     // base64, 16 bytes
-        publicKey: string     // base64 Kyber public key
-        recoveryVault: string // base64 AES-GCM ciphertext of privateKey under recoveryKey
-        recoveryKey: string   // hex recovery key — hashed then discarded
+        authKey: string           // hex — client-derived Argon2id(password, authSalt)
+        authSalt: string          // base64, 16 bytes
+        vault: string             // base64 AES-GCM ciphertext of privateKey
+        vaultSalt: string         // base64, 16 bytes
+        publicKey: string         // base64 Kyber public key
+        recoveryVault: string     // base64 AES-GCM ciphertext of privateKey under recoveryKey
+        recoveryVaultSalt: string // base64, 16 bytes — salt used to derive AES key for recoveryVault
+        recoveryKey: string       // hex recovery key — hashed then discarded
     }>()
 
-    const { username, authKey, authSalt, vault, vaultSalt, publicKey, recoveryVault, recoveryKey } = body
+    const { username, authKey, authSalt, vault, vaultSalt, publicKey, recoveryVault, recoveryVaultSalt, recoveryKey } = body
 
-    if (!username || !authKey || !authSalt || !vault || !vaultSalt || !publicKey || !recoveryVault || !recoveryKey) {
+    if (!username || !authKey || !authSalt || !vault || !vaultSalt || !publicKey || !recoveryVault || !recoveryVaultSalt || !recoveryKey) {
         return c.json({ error: 'Missing fields' }, 400)
     }
 
@@ -72,6 +73,7 @@ auth.post('/register', registerLimiter, async (c) => {
         vaultSalt,
         publicKey,
         recoveryVault,
+        recoveryVaultSalt,
         recoveryHash,
     })
 
@@ -119,6 +121,26 @@ auth.post('/login', loginLimiter, async (c) => {
     )
 
     return c.json({ userId: user.id, vault: user.vault, publicKey: user.publicKey, token })
+})
+
+// ── POST /auth/recover-vault ──────────────────────────────────────────────────
+// Step 1 of recovery: verify recovery key, return encrypted vault so client can
+// decrypt privateKey locally, then call POST /auth/recover with a new vault.
+
+auth.post('/recover-vault', recoverLimiter, async (c) => {
+    const body = await c.req.json<{ username: string; recoveryKey: string }>()
+    const { username, recoveryKey } = body
+
+    if (!username || !recoveryKey) return c.json({ error: 'Missing fields' }, 400)
+
+    const user = await db.query.users.findFirst({ where: eq(users.username, username) })
+
+    const valid = user ? await compare(recoveryKey, user.recoveryHash) : false
+    if (!valid || !user) {
+        return c.json({ error: 'Invalid recovery key' }, 401)
+    }
+
+    return c.json({ recoveryVault: user.recoveryVault, recoveryVaultSalt: user.recoveryVaultSalt })
 })
 
 // ── POST /auth/recover ────────────────────────────────────────────────────────
