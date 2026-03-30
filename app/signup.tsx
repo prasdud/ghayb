@@ -25,14 +25,17 @@ export default function SignUpScreen() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [recoveryKey, setRecoveryKey] = useState('');
 
     const handleSignUp = async () => {
+        setError('');
         if (!username.trim() || !password || !confirmPassword) {
-            Alert.alert('Error', 'All fields are required');
+            setError('All fields are required');
             return;
         }
         if (password !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
+            setError('Passwords do not match');
             return;
         }
 
@@ -81,7 +84,7 @@ export default function SignUpScreen() {
 
             if (!res.ok) {
                 const err = await res.json();
-                Alert.alert('Error', err.error ?? 'Registration failed');
+                setError(err.error ?? 'Registration failed');
                 return;
             }
 
@@ -93,7 +96,7 @@ export default function SignUpScreen() {
             });
 
             if (!loginRes.ok) {
-                Alert.alert('Error', 'Registered but login failed. Please sign in.');
+                setError('Registered but login failed. Please sign in.');
                 router.replace('/signin');
                 return;
             }
@@ -113,14 +116,11 @@ export default function SignUpScreen() {
                 await setNotificationsEnabled(true);
             }
 
-            // Show recovery key before navigating
-            Alert.alert(
-                'Save your recovery key',
-                `Write this down — it cannot be recovered:\n\n${recoveryKey}`,
-                [{ text: 'I saved it', onPress: () => router.replace('/(main)') }],
-            );
+            // Show recovery key inline before navigating
+            setRecoveryKey(recoveryKey);
         } catch (e: any) {
-            Alert.alert('Error', e?.message ?? 'Something went wrong');
+            console.error('[signup] error:', e);
+            setError(e?.message ?? 'Something went wrong');
         } finally {
             setLoading(false);
         }
@@ -168,7 +168,22 @@ export default function SignUpScreen() {
                             />
                         </View>
 
-                        <Button label={loading ? 'Creating identity…' : 'Create Identity'} onPress={handleSignUp} disabled={loading} className="w-full mb-4" />
+                        {error ? (
+                            <Text className="font-sans text-sm text-destructive mb-4 text-center">{error}</Text>
+                        ) : null}
+
+                        {recoveryKey ? (
+                            <View className="mb-4 p-4 bg-moss/10 border border-moss/30 rounded-2xl">
+                                <Text className="font-sans text-sm font-bold text-moss mb-2">Save your recovery key</Text>
+                                <Text className="font-sans text-xs text-foreground mb-3 leading-relaxed">Write this down — it cannot be shown again:</Text>
+                                <Text className="font-mono text-xs text-foreground bg-timber/10 p-2 rounded-xl mb-3 break-all">{recoveryKey}</Text>
+                                <Button label="I saved it" onPress={() => router.replace('/(main)')} className="w-full" />
+                            </View>
+                        ) : null}
+
+                        {!recoveryKey && (
+                            <Button label={loading ? 'Creating identity…' : 'Create Identity'} onPress={handleSignUp} disabled={loading} className="w-full mb-4" />
+                        )}
 
                         <View className="flex-row justify-center items-center mt-2">
                             <Text className="font-sans text-muted-foreground text-sm">Already hidden? </Text>
