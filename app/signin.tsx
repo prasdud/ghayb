@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import {
@@ -17,11 +17,17 @@ import { getNotificationsEnabled, registerPushToken } from './lib/notifications'
 
 export default function SignInScreen() {
     const router = useRouter();
-    const { setSession } = useSession();
+    const { session, setSession } = useSession();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (session) {
+            router.replace('/(main)');
+        }
+    }, [session]);
 
     const handleSignIn = async () => {
         setError('');
@@ -70,18 +76,16 @@ export default function SignInScreen() {
             const privateKey = await decryptPrivateKey(encryptedPrivateKey, password, importBytes(vaultSalt), iv);
             const publicKey = importBytes(publicKeyB64);
 
-            // 5. Create session and navigate
+            // 5. Create session (useEffect will navigate once state commits)
             setSession({ userId, username: username.trim(), publicKey, privateKey, token });
 
             const notifEnabled = await getNotificationsEnabled();
             if (notifEnabled) {
                 registerPushToken(token).catch(() => {});
             }
-
-            router.replace('/(main)');
         } catch (e: any) {
             console.error('[signin] error:', e);
-            setError(e?.message ?? 'Something went wrong');
+            setError(e?.message || 'Something went wrong');
         } finally {
             setLoading(false);
         }
