@@ -118,7 +118,7 @@ auth.post('/login', loginLimiter, async (c) => {
         process.env.JWT_SECRET!,
     )
 
-    return c.json({ vault: user.vault, publicKey: user.publicKey, token })
+    return c.json({ userId: user.id, vault: user.vault, publicKey: user.publicKey, token })
 })
 
 // ── POST /auth/recover ────────────────────────────────────────────────────────

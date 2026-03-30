@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from 'react'
 
 interface Session {
+    userId: string
     username: string
     publicKey: Uint8Array
     privateKey: Uint8Array

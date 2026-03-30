@@ -96,14 +96,14 @@ export default function SignUpScreen() {
                 return;
             }
 
-            const { token } = await loginRes.json();
+            const { userId, token } = await loginRes.json();
 
             // 7. Persist salts locally for future logins
             await SecureStore.setItemAsync('authSalt', exportBytes(authSalt));
             await SecureStore.setItemAsync('username', username.trim());
 
             // 8. Create in-memory session and navigate
-            setSession({ username: username.trim(), publicKey, privateKey, token });
+            setSession({ userId, username: username.trim(), publicKey, privateKey, token });
 
             // Show recovery key before navigating
             Alert.alert(

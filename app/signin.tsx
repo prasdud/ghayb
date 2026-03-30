@@ -59,7 +59,7 @@ export default function SignInScreen() {
                 return;
             }
 
-            const { vault, publicKey: publicKeyB64, token } = await loginRes.json();
+            const { userId, vault, publicKey: publicKeyB64, token } = await loginRes.json();
 
             // 4. Decrypt vault → privateKey
             // vault format: [IV 12 bytes][AES-GCM ciphertext]
@@ -70,7 +70,7 @@ export default function SignInScreen() {
             const publicKey = importBytes(publicKeyB64);
 
             // 5. Create session and navigate
-            setSession({ username: username.trim(), publicKey, privateKey, token });
+            setSession({ userId, username: username.trim(), publicKey, privateKey, token });
             router.replace('/(main)');
         } catch (e: any) {
             Alert.alert('Error', e?.message ?? 'Something went wrong');
