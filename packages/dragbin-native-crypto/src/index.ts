@@ -199,6 +199,40 @@ export async function decryptPrivateKey(
     return new Uint8Array(decrypted);
 }
 
+// ── User-data encryption (contacts, etc.) ─────────────────────────────────
+// Key = SHA-256(privateKey) — if you can log in, you can decrypt your data.
+// Blob format: [IV 12 bytes][AES-GCM ciphertext]
+
+async function privateKeyToCryptoKey(privateKey: Uint8Array, usage: 'encrypt' | 'decrypt'): Promise<CryptoKey> {
+    const keyBytes = await crypto.subtle.digest('SHA-256', privateKey);
+    return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, [usage]);
+}
+
+export async function encryptBlob(data: unknown, privateKey: Uint8Array): Promise<string> {
+    const key = await privateKeyToCryptoKey(privateKey, 'encrypt');
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        new TextEncoder().encode(JSON.stringify(data)),
+    );
+    const blob = new Uint8Array(12 + encrypted.byteLength);
+    blob.set(iv, 0);
+    blob.set(new Uint8Array(encrypted), 12);
+    return bytesToB64(blob);
+}
+
+export async function decryptBlob<T>(b64: string, privateKey: Uint8Array): Promise<T> {
+    const key = await privateKeyToCryptoKey(privateKey, 'decrypt');
+    const bytes = b64ToBytes(b64);
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: bytes.subarray(0, 12) },
+        key,
+        bytes.subarray(12),
+    );
+    return JSON.parse(new TextDecoder().decode(decrypted)) as T;
+}
+
 // ── Serialization (passthrough — same as @dragbin/crypto) ──────────────────
 
 export function exportBytes(data: Uint8Array): string {
