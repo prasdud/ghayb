@@ -208,7 +208,7 @@ export default function ChatListScreen() {
                             <View className="mb-4 bg-moss/10 border border-moss/20 p-4 rounded-[1.5rem]">
                                 <Text className="font-sans text-base font-bold text-moss text-center">Connected</Text>
                                 <Text className="font-sans text-xs text-moss/80 text-center mt-1">
-                                    Secure channel established with "{uauid}".
+                                    Secure channel established with &ldquo;{uauid}&rdquo;.
                                 </Text>
                             </View>
                         )}

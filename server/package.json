@@ -8,7 +8,8 @@
     "db:migrate": "bun run src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint src"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -19,8 +20,11 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.2",
+    "@typescript-eslint/parser": "^8.57.2",
     "bun-types": "latest",
     "drizzle-kit": "^0.30.0",
+    "eslint": "^10.1.0",
     "vitest": "^4.1.2"
   }
 }

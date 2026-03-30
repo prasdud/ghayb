@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "lint": "eslint . --ignore-pattern 'node_modules/**' --ignore-pattern '.expo/**' --ignore-pattern 'packages/**'"
   },
   "dependencies": {
     "@dragbin/native-crypto": "file:./packages/dragbin-native-crypto",
@@ -35,6 +36,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^10.1.0",
+    "eslint-config-expo": "^55.0.0",
     "typescript": "~5.9.2"
   },
   "private": true
