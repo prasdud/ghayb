@@ -11,7 +11,7 @@ Key primitives exposed:
 - `encryptPrivateKey(privateKey, password)` / `decryptPrivateKey(...)` — Argon2id + HKDF + AES-GCM
 - `hashPassword(password, salt)` — raw Argon2id bytes, used to derive `authKey` for server auth
 - `encryptMessage(text, recipientPK, senderPK)` / `decryptMessage({ encryptedData, wrappedKey }, privateKey)` — double-wrap scheme (see below)
-- `encryptBlob(data, privateKey)` / `decryptBlob(b64, privateKey)` — AES-GCM keyed from SHA-256(privateKey), used for contacts
+- `encryptBlob(data, privateKey)` / `decryptBlob(b64, privateKey)` — AES-GCM keyed from HKDF(privateKey, info=`dragbin-contacts-key`), used for contacts
 
 ## Message encryption (double-wrap)
 
@@ -44,9 +44,22 @@ Auth guard lives in `app/(main)/_layout.tsx`. If `session` is null it redirects 
 
 ## Contacts
 
-Contacts (`{ id, username, publicKey }[]`) are stored as an encrypted blob on the server (`users.encrypted_contacts`). Encrypted with `AES-GCM(SHA-256(privateKey))`. Fetched and decrypted on login via `GET /users/me/contacts`. Updated via `PUT /users/me/contacts` after every contact add. Server holds an opaque blob — no contact graph is visible to the server.
+Contacts (`{ id, username, publicKey }[]`) are stored as an encrypted blob on the server (`users.encrypted_contacts`). Encrypted with AES-GCM keyed from `HKDF(privateKey, info="dragbin-contacts-key")`. Fetched and decrypted on login via `GET /users/me/contacts`. Updated via `PUT /users/me/contacts` after every contact add. Server holds an opaque blob — no contact graph is visible to the server.
 
 Helper functions in `app/lib/contacts.ts`.
+
+## Push notifications
+
+Expo push notifications via `expo-notifications`. The notification body is always `"there is a new message in your inbox"` — no message content is ever sent. E2EE is preserved end-to-end.
+
+**Device token lifecycle:**
+- On signup: `registerPushToken` is called after login; if permission is granted, `notifications_enabled=true` is persisted in SecureStore.
+- On signin: if `notifications_enabled=true` in SecureStore, `registerPushToken` is called (token may have changed).
+- Settings toggle: enables → request permission + register token with server; disables → unregister token from server. Reverts if OS denies permission.
+
+**Server side:** `POST /messages` looks up `device_tokens` for the recipient and POSTs to `https://exp.host/--/api/v2/push/send` (fire-and-forget). Tokens are stored in `device_tokens` table (unique per token, cascades on user delete). Registered/unregistered via `POST /DELETE /notifications/device-tokens`.
+
+Helper functions in `app/lib/notifications.ts`.
 
 ## Backend routes
 
@@ -64,6 +77,8 @@ All authenticated routes require `Authorization: Bearer <token>`. Auth middlewar
 | POST | `/messages` | JWT | Send encrypted message |
 | GET | `/messages` | JWT | Fetch messages by conversationId |
 | GET | `/conversations` | JWT | Find conversationId by otherUserId |
+| POST | `/notifications/device-tokens` | JWT | Register Expo push token |
+| DELETE | `/notifications/device-tokens` | JWT | Unregister Expo push token |
 
 ## DB migrations
 
@@ -74,12 +89,13 @@ Current columns of note:
 - `users.encrypted_contacts` — nullable, opaque blob
 - `messages.kyber_encrypted_session_key` — recipient's wrapped key
 - `messages.sender_wrapped_key` — nullable, sender's wrapped key (null on pre-double-wrap rows)
+- `device_tokens.token` — unique Expo push token per device; `user_id` cascades on user delete
 
 ## Known limitations
 
-- **No push notifications** — messages only arrive while the app is open (3s polling)
+- **Push notifications are opt-in** — messages only arrive while the app is open (3s polling) unless the user enables notifications in settings
+- **Push requires a development build** — `expo-notifications` does not work in Expo Go; must use `npx expo run:ios` or a standalone build
 - **Chat history requires one send** if both users have never messaged before and arrive simultaneously — `GET /conversations` returns null until first `POST /messages` creates the row
-- **Recovery flow** (`POST /auth/recover`) resets auth credentials via bcrypt comparison but does not re-derive keys from `recoveryVault` — the vault column exists but the full cryptographic recovery path is not implemented
 - **Last-write-wins** on contacts sync — simultaneous contact adds on two devices may lose one entry
 
 ## Running
