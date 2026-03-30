@@ -180,3 +180,14 @@ export function importKeyPair(encoded: { publicKey: string; privateKey: string }
 export function generateSalt(): Uint8Array {
     return crypto.getRandomValues(new Uint8Array(16));
 }
+
+// Raw Argon2id hash — used to derive the server-side authKey
+// Returns same bytes that deriveAESKey feeds into HKDF, but without the HKDF step
+export async function hashPassword(password: string, salt: Uint8Array): Promise<Uint8Array> {
+    const hashB64: string = await Native.argon2id(password, bytesToB64(salt));
+    return b64ToBytes(hashB64);
+}
+
+export function bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}

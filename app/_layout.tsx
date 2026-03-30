@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { View } from 'react-native';
 
 import '../global.css';
+import { SessionProvider } from './context/SessionContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,8 +34,10 @@ export default function RootLayout() {
   }
 
   return (
-    <View className="flex-1 bg-background">
-      <Stack screenOptions={{ headerShown: false }} />
-    </View>
+    <SessionProvider>
+      <View className="flex-1 bg-background">
+        <Stack screenOptions={{ headerShown: false }} />
+      </View>
+    </SessionProvider>
   );
 }

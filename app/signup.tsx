@@ -1,20 +1,121 @@
 import React, { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { useRouter, Link } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import {
+    generateKeyPair,
+    encryptPrivateKey,
+    hashPassword,
+    generateSalt,
+    exportBytes,
+    bytesToHex,
+} from '@dragbin/native-crypto';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { BlobBackground } from '../components/BlobBackground';
 import { Card } from '../components/Card';
+import { useSession } from './context/SessionContext';
+import { API_BASE } from './lib/api';
 
 export default function SignUpScreen() {
     const router = useRouter();
+    const { setSession } = useSession();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const handleSignUp = () => {
-        // Scaffold redirect to main screen
-        router.replace('/(main)');
+    const handleSignUp = async () => {
+        if (!username.trim() || !password || !confirmPassword) {
+            Alert.alert('Error', 'All fields are required');
+            return;
+        }
+        if (password !== confirmPassword) {
+            Alert.alert('Error', 'Passwords do not match');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // 1. Generate Kyber1024 key pair
+            const { publicKey, privateKey } = await generateKeyPair();
+
+            // 2. Derive authKey: Argon2id(password, authSalt) as hex for server-side auth
+            const authSalt = generateSalt();
+            const authKeyBytes = await hashPassword(password, authSalt);
+            const authKey = bytesToHex(authKeyBytes);
+
+            // 3. Encrypt privateKey → vault (IV prepended to ciphertext)
+            const { encryptedPrivateKey, salt: vaultSalt, iv } = await encryptPrivateKey(privateKey, password);
+            const vaultBytes = new Uint8Array(iv.length + encryptedPrivateKey.length);
+            vaultBytes.set(iv);
+            vaultBytes.set(encryptedPrivateKey, iv.length);
+            const vault = exportBytes(vaultBytes);
+
+            // 4. Generate random recovery key, encrypt privateKey under it
+            const recoveryKeyBytes = crypto.getRandomValues(new Uint8Array(32));
+            const recoveryKey = bytesToHex(recoveryKeyBytes);
+            const { encryptedPrivateKey: rvCt, iv: rvIv } = await encryptPrivateKey(privateKey, recoveryKey);
+            const recoveryVaultBytes = new Uint8Array(rvIv.length + rvCt.length);
+            recoveryVaultBytes.set(rvIv);
+            recoveryVaultBytes.set(rvCt, rvIv.length);
+            const recoveryVault = exportBytes(recoveryVaultBytes);
+
+            // 5. Register with server
+            const res = await fetch(`${API_BASE}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username.trim(),
+                    authKey,
+                    authSalt: exportBytes(authSalt),
+                    vault,
+                    vaultSalt: exportBytes(vaultSalt),
+                    publicKey: exportBytes(publicKey),
+                    recoveryVault,
+                    recoveryKey,
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                Alert.alert('Error', err.error ?? 'Registration failed');
+                return;
+            }
+
+            // 6. Auto-login to get a token
+            const loginRes = await fetch(`${API_BASE}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username.trim(), authKey }),
+            });
+
+            if (!loginRes.ok) {
+                Alert.alert('Error', 'Registered but login failed. Please sign in.');
+                router.replace('/signin');
+                return;
+            }
+
+            const { token } = await loginRes.json();
+
+            // 7. Persist salts locally for future logins
+            await SecureStore.setItemAsync('authSalt', exportBytes(authSalt));
+            await SecureStore.setItemAsync('username', username.trim());
+
+            // 8. Create in-memory session and navigate
+            setSession({ username: username.trim(), publicKey, privateKey, token });
+
+            // Show recovery key before navigating
+            Alert.alert(
+                'Save your recovery key',
+                `Write this down — it cannot be recovered:\n\n${recoveryKey}`,
+                [{ text: 'I saved it', onPress: () => router.replace('/(main)') }],
+            );
+        } catch (e: any) {
+            Alert.alert('Error', e?.message ?? 'Something went wrong');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -59,7 +160,7 @@ export default function SignUpScreen() {
                             />
                         </View>
 
-                        <Button label="Create Identity" onPress={handleSignUp} className="w-full mb-4" />
+                        <Button label={loading ? 'Creating identity…' : 'Create Identity'} onPress={handleSignUp} className="w-full mb-4" />
 
                         <View className="flex-row justify-center items-center mt-2">
                             <Text className="font-sans text-muted-foreground text-sm">Already hidden? </Text>
