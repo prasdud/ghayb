@@ -83,8 +83,11 @@ export default function SignUpScreen() {
             });
 
             if (!res.ok) {
-                const err = await res.json();
-                setError(err.error ?? 'Registration failed');
+                const text = await res.text();
+                let msg = 'Registration failed';
+                try { msg = JSON.parse(text).error ?? msg; } catch { msg = text || msg; }
+                console.error('[signup] register failed:', res.status, text);
+                setError(msg);
                 return;
             }
 
