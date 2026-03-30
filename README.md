@@ -94,39 +94,64 @@ device_tokens
 ### Prerequisites
 
 - [Bun](https://bun.sh) ≥ 1.1
-- [Expo CLI](https://docs.expo.dev/get-started/installation/) (`bun install -g expo-cli`)
+- [Docker](https://www.docker.com) (for Postgres)
 - Xcode (iOS) or Android Studio (Android)
-- PostgreSQL
 
-### Backend
+### 1. Environment
+
+```bash
+# root .env — sets DB_PASSWORD used by docker-compose
+cp .env.example .env
+
+# server .env — DATABASE_URL is pre-filled for the Docker DB on :8552
+cp server/.env.example server/.env
+# edit server/.env and set a real JWT_SECRET
+```
+
+### 2. Start the database
+
+```bash
+docker compose up -d db
+```
+
+Postgres will be available on `localhost:8552`.
+
+### 3. Run the server
 
 ```bash
 cd server
 bun install
-
-# copy and fill in environment variables
-cp .env.example .env
-# DATABASE_URL=postgres://user:pass@localhost:5432/ghayb
-# JWT_SECRET=<random string>
-
-bun run db:migrate   # runs all Drizzle migrations
+bun run db:migrate   # apply all Drizzle migrations
 bun run dev          # starts on :8551 with hot reload
 ```
 
-### App
+### 4. Run the app
 
 ```bash
 # from repo root
 bun install
-
-# point the app at your server
-echo 'EXPO_PUBLIC_API_URL=http://localhost:8551' > .env
-
 npx expo prebuild --clean   # generates ios/ and android/ native projects
 npx expo run:ios            # or run:android
 ```
 
-> Push notifications require a real device or development build — they do not work in Expo Go.
+The app reads `EXPO_PUBLIC_API_URL` from `.env` — it defaults to `http://localhost:8551` if not set.
+
+> The app requires a development build (`run:ios` / `run:android`) — the native crypto module does not work in Expo Go. Push notifications also require a real device.
+
+---
+
+## Full Docker (server + db together)
+
+To run both the API and database in containers:
+
+```bash
+# root .env must have DB_PASSWORD and JWT_SECRET
+cp .env.example .env   # then fill in both values
+
+docker compose up
+```
+
+The API container runs migrations automatically on startup and listens on `:8551`.
 
 ---
 
