@@ -7,7 +7,7 @@ interface ButtonProps extends PressableProps {
     size?: 'sm' | 'default' | 'lg';
 }
 
-export function Button({ label, variant = 'primary', size = 'default', className = '', ...props }: ButtonProps) {
+export function Button({ label, variant = 'primary', size = 'default', className = '', disabled, ...props }: ButtonProps) {
     let bgClass = '';
     let textClass = '';
     let shadowClass = '';
@@ -34,7 +34,8 @@ export function Button({ label, variant = 'primary', size = 'default', className
 
     return (
         <Pressable
-            className={`rounded-full items-center justify-center ${bgClass} ${borderClass} ${shadowClass} ${sizeClass} ${className}`}
+            className={`rounded-full items-center justify-center ${bgClass} ${borderClass} ${shadowClass} ${sizeClass} ${className} ${disabled ? 'opacity-50' : ''}`}
+            disabled={disabled}
             {...props}
         >
             <Text className={`${textClass} font-sans font-bold text-base`}>{label}</Text>

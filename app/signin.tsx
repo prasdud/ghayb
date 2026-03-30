@@ -111,7 +111,7 @@ export default function SignInScreen() {
                             />
                         </View>
 
-                        <Button label={loading ? 'Signing in…' : 'Sign In'} onPress={handleSignIn} className="w-full mb-4" />
+                        <Button label={loading ? 'Signing in…' : 'Sign In'} onPress={handleSignIn} disabled={loading} className="w-full mb-4" />
 
                         <View className="flex-row justify-center items-center mt-2">
                             <Text className="font-sans text-muted-foreground text-sm">New to ghayb? </Text>

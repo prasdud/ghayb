@@ -160,7 +160,7 @@ export default function SignUpScreen() {
                             />
                         </View>
 
-                        <Button label={loading ? 'Creating identity…' : 'Create Identity'} onPress={handleSignUp} className="w-full mb-4" />
+                        <Button label={loading ? 'Creating identity…' : 'Create Identity'} onPress={handleSignUp} disabled={loading} className="w-full mb-4" />
 
                         <View className="flex-row justify-center items-center mt-2">
                             <Text className="font-sans text-muted-foreground text-sm">Already hidden? </Text>
