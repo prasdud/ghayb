@@ -55,7 +55,7 @@ export default function SignUpScreen() {
             // 4. Generate random recovery key, encrypt privateKey under it
             const recoveryKeyBytes = crypto.getRandomValues(new Uint8Array(32));
             const recoveryKey = bytesToHex(recoveryKeyBytes);
-            const { encryptedPrivateKey: rvCt, iv: rvIv } = await encryptPrivateKey(privateKey, recoveryKey);
+            const { encryptedPrivateKey: rvCt, salt: rvSalt, iv: rvIv } = await encryptPrivateKey(privateKey, recoveryKey);
             const recoveryVaultBytes = new Uint8Array(rvIv.length + rvCt.length);
             recoveryVaultBytes.set(rvIv);
             recoveryVaultBytes.set(rvCt, rvIv.length);
@@ -73,6 +73,7 @@ export default function SignUpScreen() {
                     vaultSalt: exportBytes(vaultSalt),
                     publicKey: exportBytes(publicKey),
                     recoveryVault,
+                    recoveryVaultSalt: exportBytes(rvSalt),
                     recoveryKey,
                 }),
             });
