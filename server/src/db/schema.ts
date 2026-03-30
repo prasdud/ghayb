@@ -8,9 +8,10 @@ export const users = pgTable('users', {
     vault:      text('vault').notNull(),
     vaultSalt:  text('vault_salt').notNull(),
     publicKey:      text('public_key').notNull(),
-    recoveryVault:  text('recovery_vault').notNull(),
-    recoveryHash:   text('recovery_hash').notNull(),
-    createdAt:      timestamp('created_at').notNull().defaultNow(),
+    recoveryVault:      text('recovery_vault').notNull(),
+    recoveryHash:       text('recovery_hash').notNull(),
+    encryptedContacts:  text('encrypted_contacts'),
+    createdAt:          timestamp('created_at').notNull().defaultNow(),
 })
 
 export const conversations = pgTable('conversations', {
