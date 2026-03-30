@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import {
     decryptPrivateKey,
@@ -23,14 +23,17 @@ export default function RecoverScreen() {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [recovered, setRecovered] = useState(false);
 
     const handleRecover = async () => {
+        setError('');
         if (!username.trim() || !recoveryKey.trim() || !newPassword || !confirmPassword) {
-            Alert.alert('Error', 'All fields are required');
+            setError('All fields are required');
             return;
         }
         if (newPassword !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
+            setError('Passwords do not match');
             return;
         }
 
@@ -44,7 +47,7 @@ export default function RecoverScreen() {
             });
 
             if (!vaultRes.ok) {
-                Alert.alert('Error', 'Invalid username or recovery key');
+                setError('Invalid username or recovery key');
                 return;
             }
 
@@ -83,17 +86,14 @@ export default function RecoverScreen() {
             });
 
             if (!recoverRes.ok) {
-                Alert.alert('Error', 'Recovery failed. Please try again.');
+                setError('Recovery failed. Please try again.');
                 return;
             }
 
-            Alert.alert(
-                'Account recovered',
-                'Your password has been reset. Please sign in with your new password.',
-                [{ text: 'Sign in', onPress: () => router.replace('/signin') }],
-            );
+            setRecovered(true);
         } catch (e: any) {
-            Alert.alert('Error', e?.message ?? 'Something went wrong');
+            console.error('[recover] error:', e);
+            setError(e?.message || 'Something went wrong');
         } finally {
             setLoading(false);
         }
@@ -113,60 +113,74 @@ export default function RecoverScreen() {
                     </Text>
 
                     <Card className="w-full">
-                        <View className="mb-4">
-                            <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">Username</Text>
-                            <Input
-                                placeholder="your_username"
-                                value={username}
-                                onChangeText={setUsername}
-                                autoCapitalize="none"
-                            />
-                        </View>
+                        {recovered ? (
+                            <View className="items-center py-4">
+                                <Text className="font-sans text-base font-bold text-moss mb-2">Password reset successfully.</Text>
+                                <Text className="font-sans text-sm text-muted-foreground mb-6 text-center">Sign in with your new password.</Text>
+                                <Button label="Sign In" onPress={() => router.replace('/signin')} className="w-full" />
+                            </View>
+                        ) : (
+                            <>
+                                <View className="mb-4">
+                                    <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">Username</Text>
+                                    <Input
+                                        placeholder="your_username"
+                                        value={username}
+                                        onChangeText={setUsername}
+                                        autoCapitalize="none"
+                                    />
+                                </View>
 
-                        <View className="mb-4">
-                            <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">Recovery Key</Text>
-                            <Input
-                                placeholder="64-character hex key"
-                                value={recoveryKey}
-                                onChangeText={setRecoveryKey}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
-                        </View>
+                                <View className="mb-4">
+                                    <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">Recovery Key</Text>
+                                    <Input
+                                        placeholder="64-character hex key"
+                                        value={recoveryKey}
+                                        onChangeText={setRecoveryKey}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                    />
+                                </View>
 
-                        <View className="mb-4">
-                            <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">New Password</Text>
-                            <Input
-                                placeholder="New master password"
-                                secureTextEntry
-                                value={newPassword}
-                                onChangeText={setNewPassword}
-                            />
-                        </View>
+                                <View className="mb-4">
+                                    <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">New Password</Text>
+                                    <Input
+                                        placeholder="New master password"
+                                        secureTextEntry
+                                        value={newPassword}
+                                        onChangeText={setNewPassword}
+                                    />
+                                </View>
 
-                        <View className="mb-8">
-                            <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">Confirm New Password</Text>
-                            <Input
-                                placeholder="Repeat new password"
-                                secureTextEntry
-                                value={confirmPassword}
-                                onChangeText={setConfirmPassword}
-                            />
-                        </View>
+                                <View className="mb-8">
+                                    <Text className="font-sans text-sm font-semibold text-foreground mb-2 ml-2">Confirm New Password</Text>
+                                    <Input
+                                        placeholder="Repeat new password"
+                                        secureTextEntry
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                    />
+                                </View>
 
-                        <Button
-                            label={loading ? 'Recovering…' : 'Recover Account'}
-                            onPress={handleRecover}
-                            disabled={loading}
-                            className="w-full mb-4"
-                        />
+                                {error ? (
+                                    <Text className="font-sans text-sm text-destructive mb-4 text-center">{error}</Text>
+                                ) : null}
 
-                        <View className="flex-row justify-center items-center mt-2">
-                            <Text className="font-sans text-muted-foreground text-sm">Remember your password? </Text>
-                            <Link href="/signin" asChild>
-                                <Text className="font-sans text-moss font-bold text-sm">Sign in.</Text>
-                            </Link>
-                        </View>
+                                <Button
+                                    label={loading ? 'Recovering…' : 'Recover Account'}
+                                    onPress={handleRecover}
+                                    disabled={loading}
+                                    className="w-full mb-4"
+                                />
+
+                                <View className="flex-row justify-center items-center mt-2">
+                                    <Text className="font-sans text-muted-foreground text-sm">Remember your password? </Text>
+                                    <Link href="/signin" asChild>
+                                        <Text className="font-sans text-moss font-bold text-sm">Sign in.</Text>
+                                    </Link>
+                                </View>
+                            </>
+                        )}
                     </Card>
                 </View>
             </ScrollView>
