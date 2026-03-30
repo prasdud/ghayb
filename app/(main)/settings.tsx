@@ -5,9 +5,11 @@ import { ArrowLeft, Key, Lock, Bell, Trash2, Smartphone, RefreshCw } from 'lucid
 import { BlobBackground } from '../../components/BlobBackground';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
+import { useSession } from '../context/SessionContext';
 
 export default function SettingsScreen() {
     const router = useRouter();
+    const { session } = useSession();
     const [isLocked, setIsLocked] = useState(true);
     const [hasNotifications, setHasNotifications] = useState(false);
 
@@ -30,10 +32,12 @@ export default function SettingsScreen() {
                 <Card className="mb-6 p-4 flex-col rounded-[2rem]">
                     <View className="flex-row items-center">
                         <View className="w-16 h-16 rounded-[2rem] bg-moss/20 flex items-center justify-center mr-4">
-                            <Text className="font-serif text-2xl font-bold text-moss">S</Text>
+                            <Text className="font-serif text-2xl font-bold text-moss">
+                                {session?.username?.charAt(0).toUpperCase() ?? '?'}
+                            </Text>
                         </View>
                         <View className="flex-1">
-                            <Text className="font-serif text-xl font-bold text-foreground">shadow_ghost</Text>
+                            <Text className="font-serif text-xl font-bold text-foreground">{session?.username ?? '—'}</Text>
                             <Text className="font-sans text-sm text-moss mt-1 font-bold">Identity Verified</Text>
                         </View>
                     </View>
