@@ -93,65 +93,31 @@ device_tokens
 
 ### Prerequisites
 
+- [Docker](https://www.docker.com)
 - [Bun](https://bun.sh) ≥ 1.1
-- [Docker](https://www.docker.com) (for Postgres)
 - Xcode (iOS) or Android Studio (Android)
 
-### 1. Environment
+### 1. Backend (server + DB)
 
 ```bash
-# root .env — sets DB_PASSWORD used by docker-compose
-cp .env.example .env
+cp .env.example .env        # edit: set DB_PASSWORD and JWT_SECRET
 
-# server .env — DATABASE_URL is pre-filled for the Docker DB on :8552
-cp server/.env.example server/.env
-# edit server/.env and set a real JWT_SECRET
+docker compose up           # builds the API image, starts Postgres, runs migrations
 ```
 
-### 2. Start the database
+API listens on `:8551`. Migrations run automatically on startup.
+
+### 2. App
 
 ```bash
-docker compose up -d db
-```
-
-Postgres will be available on `localhost:8552`.
-
-### 3. Run the server
-
-```bash
-cd server
-bun install
-bun run db:migrate   # apply all Drizzle migrations
-bun run dev          # starts on :8551 with hot reload
-```
-
-### 4. Run the app
-
-```bash
-# from repo root
 bun install
 npx expo prebuild --clean   # generates ios/ and android/ native projects
 npx expo run:ios            # or run:android
 ```
 
-The app reads `EXPO_PUBLIC_API_URL` from `.env` — it defaults to `http://localhost:8551` if not set.
+The app talks to `http://localhost:8551` by default. To override, set `EXPO_PUBLIC_API_URL` in `.env`.
 
-> The app requires a development build (`run:ios` / `run:android`) — the native crypto module does not work in Expo Go. Push notifications also require a real device.
-
----
-
-## Full Docker (server + db together)
-
-To run both the API and database in containers:
-
-```bash
-# root .env must have DB_PASSWORD and JWT_SECRET
-cp .env.example .env   # then fill in both values
-
-docker compose up
-```
-
-The API container runs migrations automatically on startup and listens on `:8551`.
+> The app requires a development build — the native crypto module does not work in Expo Go. Push notifications also require a real device.
 
 ---
 
