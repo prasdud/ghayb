@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter, Link } from 'expo-router';
-import * as SecureStore from './lib/secure-store';
 import {
     generateKeyPair,
     encryptPrivateKey,
@@ -106,11 +105,7 @@ export default function SignUpScreen() {
 
             const { userId, token } = await loginRes.json();
 
-            // 7. Persist salts locally for future logins
-            await SecureStore.setItemAsync('authSalt', exportBytes(authSalt));
-            await SecureStore.setItemAsync('username', username.trim());
-
-            // 8. Create in-memory session and navigate
+            // 7. Create in-memory session and navigate
             setSession({ userId, username: username.trim(), publicKey, privateKey, token });
 
             // New accounts: attempt to enable notifications by default

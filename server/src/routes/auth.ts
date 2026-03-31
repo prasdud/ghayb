@@ -109,7 +109,6 @@ auth.post('/login', loginLimiter, async (c) => {
 
     const user = await db.query.users.findFirst({ where: eq(users.username, username) })
 
-    // Constant-time: always compare even if user not found
     const valid = user ? await compare(authKey, user.authHash) : false
     if (!valid || !user) {
         return c.json({ error: 'Invalid credentials' }, 401)
