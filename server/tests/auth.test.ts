@@ -54,14 +54,15 @@ const get  = (path: string, opts?: RequestOptions) => request('GET', path, undef
 // ── Shared fixtures ───────────────────────────────────────────────────────────
 
 const validRegistration = {
-    username:      'alice',
-    authKey:       'auth-key-hex',
-    authSalt:      'auth-salt-b64',
-    vault:         'vault-b64',
-    vaultSalt:     'vault-salt-b64',
-    publicKey:     'pub-key-b64',
-    recoveryVault: 'recovery-vault-b64',
-    recoveryKey:   'recovery-key-hex',
+    username:          'alice',
+    authKey:           'auth-key-hex',
+    authSalt:          'auth-salt-b64',
+    vault:             'vault-b64',
+    vaultSalt:         'vault-salt-b64',
+    publicKey:         'pub-key-b64',
+    recoveryVault:     'recovery-vault-b64',
+    recoveryVaultSalt: 'recovery-vault-salt-b64',
+    recoveryKey:       'recovery-key-hex',
 }
 
 const existingUser = {
@@ -180,6 +181,7 @@ describe('POST /auth/login', () => {
 
         expect(res.status).toBe(200)
         expect(await res.json()).toEqual({
+            userId:    'user-1',
             vault:     'vault-b64',
             publicKey: 'pub-key-b64',
             token:     'test-token',
