@@ -41,7 +41,7 @@ export default function ChatScreen() {
                 let convId = conversationIdRef.current;
 
                 if (!convId) {
-                    const r = await fetch(`${API_BASE}/conversations?otherUserId=${recipientId}`, {
+                    const r = await fetch(`${API_BASE}/messages/conversations?otherUserId=${recipientId}`, {
                         headers: { Authorization: `Bearer ${session.token}` },
                     });
                     if (!r.ok) return;
