@@ -27,6 +27,9 @@ export default function ChatScreen() {
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
     const scrollRef = useRef<ScrollView>(null);
+    // Ref so the poll closure always sees the latest conversationId without needing
+    // to be recreated every time state changes.
+    const conversationIdRef = useRef<string | null>(null);
 
     // Single poll loop: discover conversationId if missing, then fetch messages.
     // Runs every 3s so the recipient's screen updates when the sender initiates.
@@ -35,7 +38,7 @@ export default function ChatScreen() {
 
         const poll = async () => {
             try {
-                let convId = conversationId;
+                let convId = conversationIdRef.current;
 
                 if (!convId) {
                     const r = await fetch(`${API_BASE}/conversations?otherUserId=${recipientId}`, {
@@ -44,6 +47,7 @@ export default function ChatScreen() {
                     if (!r.ok) return;
                     const { conversationId: cid } = await r.json();
                     if (!cid) return; // no conversation yet — try again next tick
+                    conversationIdRef.current = cid;
                     setConversationId(cid);
                     convId = cid;
                 }
@@ -121,7 +125,8 @@ export default function ChatScreen() {
             }
 
             const { conversationId: convId } = await res.json();
-            if (!conversationId) {
+            if (!conversationIdRef.current) {
+                conversationIdRef.current = convId;
                 setConversationId(convId);
             }
 
