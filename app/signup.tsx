@@ -25,7 +25,6 @@ export default function SignUpScreen() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [recoveryKey, setRecoveryKey] = useState('');
 
     const handleSignUp = async () => {
         setError('');
@@ -114,8 +113,11 @@ export default function SignUpScreen() {
                 await setNotificationsEnabled(true);
             }
 
-            // Show recovery key inline before navigating
-            setRecoveryKey(recoveryKey);
+            // Navigate to the recovery key screen
+            router.replace({
+                pathname: '/recovery-key',
+                params: { key: recoveryKey, username: username.trim() },
+            });
         } catch (e: any) {
             console.error('[signup] error:', e);
             setError(e?.message ?? 'Something went wrong');
@@ -170,18 +172,7 @@ export default function SignUpScreen() {
                             <Text className="font-sans text-sm text-destructive mb-4 text-center">{error}</Text>
                         ) : null}
 
-                        {recoveryKey ? (
-                            <View className="mb-4 p-4 bg-moss/10 border border-moss/30 rounded-2xl">
-                                <Text className="font-sans text-sm font-bold text-moss mb-2">Save your recovery key</Text>
-                                <Text className="font-sans text-xs text-foreground mb-3 leading-relaxed">Write this down — it cannot be shown again:</Text>
-                                <Text className="font-mono text-xs text-foreground bg-timber/10 p-2 rounded-xl mb-3 break-all">{recoveryKey}</Text>
-                                <Button label="I saved it" onPress={() => router.replace('/(main)')} className="w-full" />
-                            </View>
-                        ) : null}
-
-                        {!recoveryKey && (
-                            <Button label={loading ? 'Creating identity…' : 'Create Identity'} onPress={handleSignUp} disabled={loading} className="w-full mb-4" />
-                        )}
+                        <Button label={loading ? 'Creating identity…' : 'Create Identity'} onPress={handleSignUp} disabled={loading} className="w-full mb-4" />
 
                         <View className="flex-row justify-center items-center mt-2">
                             <Text className="font-sans text-muted-foreground text-sm">Already hidden? </Text>
