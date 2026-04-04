@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, KeyboardAvoidingView, Platform, Pressable, TextInput, Alert, FlatList, Animated, Easing } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Send } from 'lucide-react-native';
 import { BlobBackground } from '../../../components/BlobBackground';
@@ -14,6 +14,60 @@ interface Message {
     time: string
 }
 
+// ── Animated chat bubble ──────────────────────────────────────────────────────
+
+function ChatBubble({ msg, isMe, isNew }: { msg: Message; isMe: boolean; isNew: boolean }) {
+    const animValue = useRef(new Animated.Value(isNew ? 0 : 1)).current;
+
+    useEffect(() => {
+        if (!isNew) return;
+        Animated.timing(animValue, {
+            toValue: 1,
+            duration: 280,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+        }).start();
+    }, []);
+
+    return (
+        <Animated.View
+            style={{
+                opacity: animValue,
+                transform: [
+                    {
+                        translateY: animValue.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [16, 0],
+                        }),
+                    },
+                    {
+                        scale: animValue.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.95, 1],
+                        }),
+                    },
+                ],
+            }}
+            className={`mb-3 max-w-[80%] ${isMe ? 'self-end' : 'self-start'}`}
+        >
+            <View
+                className={`px-4 py-3 ${isMe
+                    ? 'bg-moss rounded-[1.5rem] rounded-br-md shadow-[0_2px_12px_-2px_rgba(93,112,82,0.2)]'
+                    : 'bg-white rounded-[1.5rem] rounded-bl-md border border-timber/30 shadow-[0_2px_12px_-2px_rgba(222,216,207,0.4)]'}`}
+            >
+                <Text className={`font-sans text-[15px] leading-relaxed ${isMe ? 'text-primary-foreground' : 'text-foreground'}`}>
+                    {msg.text}
+                </Text>
+            </View>
+            <Text className={`font-sans text-[10px] text-muted-foreground mt-1 mx-3 ${isMe ? 'text-right' : 'text-left'}`}>
+                {msg.time}
+            </Text>
+        </Animated.View>
+    );
+}
+
+// ── Chat screen ───────────────────────────────────────────────────────────────
+
 export default function ChatScreen() {
     const { id: recipientId, name, publicKey: publicKeyB64 } = useLocalSearchParams<{
         id: string
@@ -26,13 +80,12 @@ export default function ChatScreen() {
     const [inputText, setInputText] = useState('');
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
-    const scrollRef = useRef<ScrollView>(null);
-    // Ref so the poll closure always sees the latest conversationId without needing
-    // to be recreated every time state changes.
+    const flatListRef = useRef<FlatList>(null);
     const conversationIdRef = useRef<string | null>(null);
+    // Track which message IDs we've already seen so we only animate new ones
+    const seenIdsRef = useRef<Set<string>>(new Set());
 
-    // Single poll loop: discover conversationId if missing, then fetch messages.
-    // Runs every 3s so the recipient's screen updates when the sender initiates.
+    // Single poll loop
     useEffect(() => {
         if (!session || !recipientId) return;
 
@@ -46,7 +99,7 @@ export default function ChatScreen() {
                     });
                     if (!r.ok) return;
                     const { conversationId: cid } = await r.json();
-                    if (!cid) return; // no conversation yet — try again next tick
+                    if (!cid) return;
                     conversationIdRef.current = cid;
                     setConversationId(cid);
                     convId = cid;
@@ -85,7 +138,7 @@ export default function ChatScreen() {
 
                 setMessages(decrypted);
             } catch {
-                // silently retry on next interval
+                // silently retry
             }
         };
 
@@ -93,6 +146,13 @@ export default function ChatScreen() {
         const interval = setInterval(poll, 3000);
         return () => clearInterval(interval);
     }, [session?.userId, recipientId]);
+
+    // Auto-scroll when new messages arrive
+    useEffect(() => {
+        if (messages.length > 0) {
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+    }, [messages.length]);
 
     const handleSend = async () => {
         const text = inputText.trim();
@@ -133,7 +193,6 @@ export default function ChatScreen() {
             }
 
             setInputText('');
-            scrollRef.current?.scrollToEnd({ animated: true });
         } catch (e: any) {
             Alert.alert('Error', e?.message ?? 'Failed to send message');
         } finally {
@@ -141,6 +200,12 @@ export default function ChatScreen() {
         }
     };
 
+    const renderMessage = useCallback(({ item }: { item: Message }) => {
+        const isMe = item.senderId === session?.userId;
+        const isNew = !seenIdsRef.current.has(item.id);
+        if (isNew) seenIdsRef.current.add(item.id);
+        return <ChatBubble msg={item} isMe={isMe} isNew={isNew} />;
+    }, [session?.userId]);
 
     return (
         <KeyboardAvoidingView
@@ -164,40 +229,22 @@ export default function ChatScreen() {
             </View>
 
             {/* Messages */}
-            <ScrollView
-                ref={scrollRef}
+            <FlatList
+                ref={flatListRef}
+                data={messages}
+                keyExtractor={(item) => item.id}
+                renderItem={renderMessage}
                 className="flex-1 z-10"
-                contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 16 }}
-                onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-            >
-                {messages.length === 0 && (
-                    <Text className="font-sans text-sm text-muted-foreground text-center mt-8">
-                        Send a message to start the conversation.
-                    </Text>
-                )}
-                {messages.map((msg) => {
-                    const isMe = msg.senderId === session?.userId;
-                    return (
-                        <View
-                            key={msg.id}
-                            className={`mb-4 max-w-[80%] ${isMe ? 'self-end' : 'self-start'}`}
-                        >
-                            <View
-                                className={`p-4 ${isMe
-                                    ? 'bg-moss rounded-[2rem] rounded-tr-lg shadow-[0_4px_20px_-2px_rgba(93,112,82,0.15)]'
-                                    : 'bg-white rounded-[2rem] rounded-tl-lg border border-timber/40 shadow-[0_4px_20px_-2px_rgba(222,216,207,0.5)]'}`}
-                            >
-                                <Text className={`font-sans text-base leading-relaxed ${isMe ? 'text-primary-foreground' : 'text-foreground'}`}>
-                                    {msg.text}
-                                </Text>
-                            </View>
-                            <Text className={`font-sans text-[10px] text-muted-foreground mt-1 mx-2 ${isMe ? 'text-right' : 'text-left'}`}>
-                                {msg.time}
-                            </Text>
-                        </View>
-                    );
-                })}
-            </ScrollView>
+                contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 16, flexGrow: 1 }}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                    <View className="flex-1 items-center justify-center">
+                        <Text className="font-sans text-sm text-muted-foreground text-center mt-8">
+                            Send a message to start the conversation.
+                        </Text>
+                    </View>
+                }
+            />
 
             {/* Input Area */}
             <View className="p-4 px-6 z-10 bg-background/80 backdrop-blur-md border-t border-timber/20 flex-row items-end">
