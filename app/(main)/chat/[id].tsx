@@ -47,8 +47,10 @@ function ChatBubble({ msg, isMe, isNew }: { msg: Message; isMe: boolean; isNew: 
                         }),
                     },
                 ],
+                alignSelf: isMe ? 'flex-end' : 'flex-start',
+                maxWidth: '80%',
+                marginBottom: 12,
             }}
-            className={`mb-3 max-w-[80%] ${isMe ? 'self-end' : 'self-start'}`}
         >
             <View
                 className={`px-4 py-3 ${isMe
