@@ -277,7 +277,7 @@ export default function ChatListScreen() {
                                 onPress={() => { setMenuVisible(false); handleLockIdentity(); }}
                                 className="p-4 active:bg-destructive/10"
                             >
-                                <Text className="font-sans text-sm font-bold text-destructive">Lock Identity</Text>
+                                <Text className="font-sans text-sm font-bold text-destructive">Logout</Text>
                             </Pressable>
                         </View>
                     </Pressable>
