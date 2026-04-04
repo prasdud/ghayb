@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, Modal, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, FlatList, Pressable, Modal, KeyboardAvoidingView, Platform, Alert, SectionList } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Plus, X, MoreVertical } from 'lucide-react-native';
+import { Plus, X, MoreVertical, UserPlus, Check, XCircle } from 'lucide-react-native';
 import { BlobBackground } from '../../components/BlobBackground';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
@@ -9,52 +9,71 @@ import { Card } from '../../components/Card';
 import { useSession } from '../context/SessionContext';
 import { API_BASE } from '../lib/api';
 import { Contact, fetchAndDecryptContacts, encryptAndSaveContacts } from '../lib/contacts';
+import { encryptMessage, importBytes, exportBytes } from '@dragbin/native-crypto';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface PendingConnection {
+    conversationId: string;
+    user: { id: string; username: string; publicKey: string };
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ChatListScreen() {
     const router = useRouter();
     const { session, clearSession } = useSession();
     const [contacts, setContacts] = useState<Contact[]>([]);
+    const [pendingConnections, setPendingConnections] = useState<PendingConnection[]>([]);
     const [isOverlayVisible, setOverlayVisible] = useState(false);
     const [isMenuVisible, setMenuVisible] = useState(false);
     const [uauid, setUauid] = useState('');
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState('');
+    const contactsRef = useRef<Contact[]>([]);
+
+    // Keep ref in sync so the polling callback always has current contacts
+    useEffect(() => { contactsRef.current = contacts; }, [contacts]);
 
     // Load contacts from server on mount
     useEffect(() => {
         if (!session) return;
         fetchAndDecryptContacts(session.token, session.privateKey)
-            .then(setContacts)
-            .catch(() => {}); // non-fatal — empty list on failure
-    }, [session?.userId]); // re-run only on user change, not every render
+            .then((c) => { setContacts(c); contactsRef.current = c; })
+            .catch(() => { }); // non-fatal — empty list on failure
+    }, [session?.userId]);
+
+    // Poll for pending connections every 5 seconds
+    const fetchPending = useCallback(async () => {
+        if (!session) return;
+        try {
+            const knownIds = contactsRef.current.map((c) => c.id).join(',');
+            const res = await fetch(
+                `${API_BASE}/messages/pending?knownUserIds=${encodeURIComponent(knownIds)}`,
+                { headers: { Authorization: `Bearer ${session.token}` } },
+            );
+            if (!res.ok) return;
+            const data: PendingConnection[] = await res.json();
+            setPendingConnections(data);
+        } catch {
+            // silently retry
+        }
+    }, [session?.token]);
+
+    useEffect(() => {
+        if (!session) return;
+        fetchPending();
+        const interval = setInterval(fetchPending, 5000);
+        return () => clearInterval(interval);
+    }, [session?.userId, fetchPending]);
+
+    // ── Handlers ──────────────────────────────────────────────────────────────
 
     const handleOpenChat = (contact: Contact) => {
         router.push({
             pathname: '/(main)/chat/[id]',
             params: { id: contact.id, name: contact.username, publicKey: contact.publicKey },
         });
-    };
-
-    const renderItem = ({ item }: { item: Contact }) => (
-        <Pressable
-            onPress={() => handleOpenChat(item)}
-            className="flex-row items-center p-4 mb-4 bg-white/60 rounded-[2rem] border border-timber/30 shadow-[0_4px_20px_-2px_rgba(93,112,82,0.05)]"
-        >
-            <View className="w-14 h-14 rounded-[2rem] bg-moss/20 flex items-center justify-center mr-4">
-                <Text className="font-serif text-xl font-bold text-moss">{item.username.charAt(0).toUpperCase()}</Text>
-            </View>
-            <View className="flex-1">
-                <Text className="font-serif font-bold text-lg text-foreground">{item.username}</Text>
-                <Text className="font-sans text-xs text-moss font-bold mt-0.5">E2EE Active</Text>
-            </View>
-        </Pressable>
-    );
-
-    const handleOpenOverlay = () => {
-        setOverlayVisible(true);
-        setUauid('');
-        setStatus('idle');
-        setErrorMsg('');
     };
 
     const handleSendRequest = async () => {
@@ -69,7 +88,7 @@ export default function ChatListScreen() {
             setErrorMsg('You cannot connect to yourself.');
             return;
         }
-        if (contacts.find(c => c.username === target)) {
+        if (contacts.find(c => c.username.toLowerCase() === target.toLowerCase())) {
             setStatus('error');
             setErrorMsg('Already connected to this user.');
             return;
@@ -77,6 +96,7 @@ export default function ChatListScreen() {
 
         setStatus('loading');
         try {
+            // 1. Look up the target user
             const res = await fetch(`${API_BASE}/users/${encodeURIComponent(target)}`, {
                 headers: { Authorization: `Bearer ${session.token}` },
             });
@@ -93,11 +113,39 @@ export default function ChatListScreen() {
             }
 
             const { id, username, publicKey } = await res.json();
-            const newContacts = [...contacts, { id, username, publicKey }];
 
-            // Update state and persist encrypted blob to server
+            // 2. Add to contacts
+            const newContacts = [...contacts, { id, username, publicKey }];
             setContacts(newContacts);
             await encryptAndSaveContacts(newContacts, session.token, session.privateKey);
+
+            // 3. Auto-send a connection_request message (the recipient will see this as an incoming request)
+            const recipientPublicKey = importBytes(publicKey);
+            const payload = JSON.stringify({
+                type: 'connection_request',
+                username: session.username,
+                publicKey: exportBytes(session.publicKey),
+            });
+            const { encryptedData, recipientWrappedKey, senderWrappedKey } = await encryptMessage(
+                payload,
+                recipientPublicKey,
+                session.publicKey,
+            );
+
+            await fetch(`${API_BASE}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.token}`,
+                },
+                body: JSON.stringify({
+                    recipientId: id,
+                    encryptedData: exportBytes(encryptedData),
+                    kyberEncryptedSessionKey: exportBytes(recipientWrappedKey),
+                    senderWrappedKey: exportBytes(senderWrappedKey),
+                }),
+            });
+
             setStatus('success');
         } catch {
             setStatus('error');
@@ -105,10 +153,87 @@ export default function ChatListScreen() {
         }
     };
 
+    const handleAcceptConnection = async (pending: PendingConnection) => {
+        if (!session) return;
+        try {
+            const { id, username, publicKey } = pending.user;
+            const newContacts = [...contacts, { id, username, publicKey }];
+            setContacts(newContacts);
+            await encryptAndSaveContacts(newContacts, session.token, session.privateKey);
+
+            // Remove from pending list
+            setPendingConnections((prev) => prev.filter((p) => p.conversationId !== pending.conversationId));
+        } catch {
+            Alert.alert('Error', 'Failed to accept connection.');
+        }
+    };
+
+    const handleIgnoreConnection = (pending: PendingConnection) => {
+        setPendingConnections((prev) => prev.filter((p) => p.conversationId !== pending.conversationId));
+    };
+
+    const handleOpenOverlay = () => {
+        setOverlayVisible(true);
+        setUauid('');
+        setStatus('idle');
+        setErrorMsg('');
+    };
+
     const handleLockIdentity = () => {
         clearSession();
         router.replace('/signin');
     };
+
+    // ── Render helpers ────────────────────────────────────────────────────────
+
+    const renderContactItem = ({ item }: { item: Contact }) => (
+        <Pressable
+            onPress={() => handleOpenChat(item)}
+            className="flex-row items-center p-4 mb-4 bg-white/60 rounded-[2rem] border border-timber/30 shadow-[0_4px_20px_-2px_rgba(93,112,82,0.05)]"
+        >
+            <View className="w-14 h-14 rounded-[2rem] bg-moss/20 flex items-center justify-center mr-4">
+                <Text className="font-serif text-xl font-bold text-moss">{item.username.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View className="flex-1">
+                <Text className="font-serif font-bold text-lg text-foreground">{item.username}</Text>
+                <Text className="font-sans text-xs text-moss font-bold mt-0.5">E2EE Active</Text>
+            </View>
+        </Pressable>
+    );
+
+    const renderPendingItem = ({ item }: { item: PendingConnection }) => (
+        <View className="flex-row items-center p-4 mb-4 bg-clay/5 rounded-[2rem] border border-clay/20 shadow-[0_4px_20px_-2px_rgba(193,140,93,0.08)]">
+            <View className="w-14 h-14 rounded-[2rem] bg-clay/15 flex items-center justify-center mr-4">
+                <UserPlus color="#C18C5D" size={22} />
+            </View>
+            <View className="flex-1 mr-3">
+                <Text className="font-serif font-bold text-lg text-foreground">{item.user.username}</Text>
+                <Text className="font-sans text-xs text-clay font-bold mt-0.5">Wants to connect</Text>
+            </View>
+            <Pressable
+                onPress={() => handleAcceptConnection(item)}
+                className="w-10 h-10 rounded-full bg-moss/15 flex items-center justify-center mr-2 active:scale-95"
+            >
+                <Check color="#5D7052" size={20} strokeWidth={2.5} />
+            </Pressable>
+            <Pressable
+                onPress={() => handleIgnoreConnection(item)}
+                className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center active:scale-95"
+            >
+                <X color="#A85448" size={18} strokeWidth={2.5} />
+            </Pressable>
+        </View>
+    );
+
+    // Build section data for SectionList
+    const sections = [
+        ...(pendingConnections.length > 0
+            ? [{ title: 'Pending', data: pendingConnections as any[], type: 'pending' as const }]
+            : []),
+        ...(contacts.length > 0
+            ? [{ title: 'Contacts', data: contacts as any[], type: 'contacts' as const }]
+            : []),
+    ];
 
     return (
         <View className="flex-1 bg-background">
@@ -147,20 +272,41 @@ export default function ChatListScreen() {
                 </Modal>
             </View>
 
-            {/* Chat List */}
-            <FlatList
-                data={contacts}
-                keyExtractor={item => item.id}
-                renderItem={renderItem}
-                ListEmptyComponent={
-                    <View className="flex-1 items-center justify-center mt-24 px-8">
-                        <Text className="font-serif text-2xl font-bold text-foreground/40 text-center">No connections yet.</Text>
-                        <Text className="font-sans text-sm text-muted-foreground text-center mt-2">Tap + to connect with someone.</Text>
-                    </View>
-                }
-                contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100, flexGrow: 1 }}
-                showsVerticalScrollIndicator={false}
-            />
+            {/* Main List */}
+            {sections.length > 0 ? (
+                <SectionList
+                    sections={sections}
+                    keyExtractor={(item, index) => item.id ?? item.conversationId ?? String(index)}
+                    renderItem={({ item, section }) =>
+                        section.type === 'pending'
+                            ? renderPendingItem({ item })
+                            : renderContactItem({ item })
+                    }
+                    renderSectionHeader={({ section }) =>
+                        section.type === 'pending' ? (
+                            <View className="mb-3 ml-1">
+                                <Text className="font-sans text-xs font-bold text-clay uppercase tracking-widest">
+                                    Incoming Requests
+                                </Text>
+                            </View>
+                        ) : contacts.length > 0 && pendingConnections.length > 0 ? (
+                            <View className="mb-3 mt-2 ml-1">
+                                <Text className="font-sans text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                                    Contacts
+                                </Text>
+                            </View>
+                        ) : null
+                    }
+                    contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 100, flexGrow: 1 }}
+                    showsVerticalScrollIndicator={false}
+                    stickySectionHeadersEnabled={false}
+                />
+            ) : (
+                <View className="flex-1 items-center justify-center px-8">
+                    <Text className="font-serif text-2xl font-bold text-foreground/40 text-center">No connections yet.</Text>
+                    <Text className="font-sans text-sm text-muted-foreground text-center mt-2">Tap + to connect with someone.</Text>
+                </View>
+            )}
 
             {/* FAB */}
             <Pressable
@@ -211,16 +357,16 @@ export default function ChatListScreen() {
 
                         {status === 'success' && (
                             <View className="mb-4 bg-moss/10 border border-moss/20 p-4 rounded-[1.5rem]">
-                                <Text className="font-sans text-base font-bold text-moss text-center">Connected</Text>
+                                <Text className="font-sans text-base font-bold text-moss text-center">Request Sent</Text>
                                 <Text className="font-sans text-xs text-moss/80 text-center mt-1">
-                                    Secure channel established with &ldquo;{uauid}&rdquo;.
+                                    Connection request sent to &ldquo;{uauid}&rdquo;. They&apos;ll see it next time they open the app.
                                 </Text>
                             </View>
                         )}
 
                         {status !== 'success' ? (
                             <Button
-                                label={status === 'loading' ? 'Looking up…' : 'Connect'}
+                                label={status === 'loading' ? 'Sending…' : 'Connect'}
                                 onPress={handleSendRequest}
                                 className={`w-full mt-2 ${status === 'loading' ? 'opacity-50' : ''}`}
                                 disabled={status === 'loading'}
