@@ -59,7 +59,7 @@ export default function ChatScreen() {
 
                 const raw: { id: string; senderId: string; encryptedData: string; kyberEncryptedSessionKey: string; senderWrappedKey: string | null; createdAt: string }[] = await res.json();
 
-                const decrypted: Message[] = await Promise.all(
+                const decrypted: Message[] = (await Promise.all(
                     raw.map(async (m) => {
                         const isMine = m.senderId === session.userId;
                         const wrappedKeyB64 = isMine ? m.senderWrappedKey : m.kyberEncryptedSessionKey;
@@ -74,12 +74,14 @@ export default function ChatScreen() {
                                 },
                                 session.privateKey,
                             );
+                            // Hide connection_request messages from the chat view
+                            try { const parsed = JSON.parse(text); if (parsed?.type === 'connection_request') return null; } catch { }
                             return { id: m.id, senderId: m.senderId, text, time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
                         } catch {
                             return { id: m.id, senderId: m.senderId, text: '[decryption failed]', time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
                         }
                     }),
-                );
+                )).filter((m): m is Message => m !== null);
 
                 setMessages(decrypted);
             } catch {
