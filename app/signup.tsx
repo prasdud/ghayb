@@ -32,6 +32,8 @@ export default function SignUpScreen() {
     const [recoveryKey, setRecoveryKey] = useState('');
     const [copied, setCopied] = useState(false);
     const [downloaded, setDownloaded] = useState(false);
+    // Deferred session — stored until user acknowledges recovery key
+    const pendingSessionRef = useRef<{ userId: string; username: string; publicKey: Uint8Array; privateKey: Uint8Array; token: string } | null>(null);
 
     // Animated progress bar
     const progressAnim = useRef(new Animated.Value(0)).current;
@@ -114,8 +116,8 @@ export default function SignUpScreen() {
 
             const { userId, token } = await loginRes.json();
 
-            // 7. Create in-memory session and navigate
-            setSession({ userId, username: username.trim(), publicKey, privateKey, token });
+            // 7. Store session for later (don't set it yet — that would trigger auto-navigation)
+            pendingSessionRef.current = { userId, username: username.trim(), publicKey, privateKey, token };
 
             // New accounts: attempt to enable notifications by default
             const registered = await registerPushToken(token).catch(() => false);
@@ -303,7 +305,12 @@ export default function SignUpScreen() {
 
                         <Button
                             label="I've saved my key — Continue"
-                            onPress={() => router.replace('/(main)')}
+                            onPress={() => {
+                                if (pendingSessionRef.current) {
+                                    setSession(pendingSessionRef.current);
+                                }
+                                router.replace('/(main)');
+                            }}
                             className="w-full"
                         />
                     </View>
