@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Animated, Easing, Share } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import {
     generateKeyPair,
@@ -9,6 +9,7 @@ import {
     exportBytes,
     bytesToHex,
 } from '@dragbin/native-crypto';
+import { Shield } from 'lucide-react-native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { BlobBackground } from '../components/BlobBackground';
@@ -25,6 +26,15 @@ export default function SignUpScreen() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // Recovery key flow state
+    const [phase, setPhase] = useState<'form' | 'generating' | 'ready'>('form');
+    const [recoveryKey, setRecoveryKey] = useState('');
+    const [copied, setCopied] = useState(false);
+    const [downloaded, setDownloaded] = useState(false);
+
+    // Animated progress bar
+    const progressAnim = useRef(new Animated.Value(0)).current;
 
     const handleSignUp = async () => {
         setError('');
@@ -56,8 +66,8 @@ export default function SignUpScreen() {
 
             // 4. Generate random recovery key, encrypt privateKey under it
             const recoveryKeyBytes = crypto.getRandomValues(new Uint8Array(32));
-            const recoveryKey = bytesToHex(recoveryKeyBytes);
-            const { encryptedPrivateKey: rvCt, salt: rvSalt, iv: rvIv } = await encryptPrivateKey(privateKey, recoveryKey);
+            const generatedRecoveryKey = bytesToHex(recoveryKeyBytes);
+            const { encryptedPrivateKey: rvCt, salt: rvSalt, iv: rvIv } = await encryptPrivateKey(privateKey, generatedRecoveryKey);
             const recoveryVaultBytes = new Uint8Array(rvIv.length + rvCt.length);
             recoveryVaultBytes.set(rvIv);
             recoveryVaultBytes.set(rvCt, rvIv.length);
@@ -76,7 +86,7 @@ export default function SignUpScreen() {
                     publicKey: exportBytes(publicKey),
                     recoveryVault,
                     recoveryVaultSalt: exportBytes(rvSalt),
-                    recoveryKey,
+                    recoveryKey: generatedRecoveryKey,
                 }),
             });
 
@@ -113,10 +123,20 @@ export default function SignUpScreen() {
                 await setNotificationsEnabled(true);
             }
 
-            // Navigate to the recovery key screen
-            router.replace({
-                pathname: '/recovery-key',
-                params: { key: recoveryKey, username: username.trim() },
+            // 8. Show recovery key screen
+            setRecoveryKey(generatedRecoveryKey);
+            setPhase('generating');
+
+            // Animate the progress bar
+            const duration = 2000 + Math.random() * 2000;
+            progressAnim.setValue(0);
+            Animated.timing(progressAnim, {
+                toValue: 1,
+                duration,
+                easing: Easing.bezier(0.4, 0, 0.2, 1),
+                useNativeDriver: false,
+            }).start(() => {
+                setPhase('ready');
             });
         } catch (e: any) {
             console.error('[signup] error:', e);
@@ -125,6 +145,174 @@ export default function SignUpScreen() {
             setLoading(false);
         }
     };
+
+    // ── Recovery key helpers ──────────────────────────────────────────────────
+
+    const handleCopy = async () => {
+        if (!recoveryKey) return;
+        try {
+            if (Platform.OS === 'web') {
+                await navigator.clipboard.writeText(recoveryKey);
+            } else {
+                await Share.share({ message: recoveryKey });
+            }
+            setCopied(true);
+            setTimeout(() => setCopied(false), 3000);
+        } catch { }
+    };
+
+    const buildFileContent = () => [
+        '═══════════════════════════════════════════',
+        '  ghayb — Recovery Key',
+        '═══════════════════════════════════════════',
+        '',
+        `  Username: ${username.trim()}`,
+        `  Generated: ${new Date().toISOString()}`,
+        '',
+        '  RECOVERY KEY:',
+        `  ${recoveryKey}`,
+        '',
+        '  ⚠ Keep this file safe and private.',
+        '  ⚠ This key is the ONLY way to recover',
+        '    your account if you forget your password.',
+        '',
+        '═══════════════════════════════════════════',
+    ].join('\n');
+
+    const handleDownload = async () => {
+        if (!recoveryKey) return;
+        const content = buildFileContent();
+
+        if (Platform.OS === 'web') {
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ghayb-recovery-key-${username.trim()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } else {
+            await Share.share({ message: content, title: 'ghayb Recovery Key' });
+        }
+        setDownloaded(true);
+    };
+
+    const progressWidth = progressAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0%', '100%'],
+    });
+
+    // ── Generating phase ──────────────────────────────────────────────────────
+
+    if (phase === 'generating') {
+        return (
+            <View className="flex-1 bg-background">
+                <BlobBackground />
+                <View className="flex-1 justify-center items-center px-8 z-10">
+                    <View className="w-20 h-20 rounded-[2rem] bg-moss/15 flex items-center justify-center mb-8">
+                        <Shield color="#5D7052" size={36} />
+                    </View>
+
+                    <Text className="font-serif text-3xl font-bold text-foreground text-center mb-3">
+                        Generating your key…
+                    </Text>
+                    <Text className="font-sans text-sm text-muted-foreground text-center mb-10 max-w-xs leading-relaxed">
+                        Creating a unique recovery key for your identity. This may take a moment.
+                    </Text>
+
+                    {/* Progress bar */}
+                    <View className="w-full max-w-xs h-3 bg-timber/20 rounded-full overflow-hidden">
+                        <Animated.View
+                            style={{ width: progressWidth, height: '100%' }}
+                            className="bg-moss rounded-full"
+                        />
+                    </View>
+                    <Text className="font-sans text-xs text-muted-foreground mt-3">
+                        Deriving cryptographic material…
+                    </Text>
+                </View>
+            </View>
+        );
+    }
+
+    // ── Recovery key ready phase ──────────────────────────────────────────────
+
+    if (phase === 'ready') {
+        return (
+            <View className="flex-1 bg-background">
+                <BlobBackground />
+                <ScrollView
+                    contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+                >
+                    <View className="w-full max-w-sm my-12 z-10">
+                        <View className="items-center mb-8">
+                            <View className="w-20 h-20 rounded-[2rem] bg-moss/15 flex items-center justify-center mb-6">
+                                <Shield color="#5D7052" size={36} />
+                            </View>
+                            <Text className="font-serif text-3xl font-bold text-foreground text-center mb-2">
+                                Your Recovery Key
+                            </Text>
+                            <Text className="font-sans text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
+                                This is the only way to recover your account. Save it somewhere safe — it cannot be shown again.
+                            </Text>
+                        </View>
+
+                        <Card className="w-full mb-6">
+                            {/* Key display */}
+                            <View className="bg-timber/10 border border-timber/30 rounded-[1.5rem] p-5 mb-5">
+                                <Text
+                                    className="font-mono text-xs text-foreground leading-relaxed tracking-wider"
+                                    selectable
+                                >
+                                    {recoveryKey}
+                                </Text>
+                            </View>
+
+                            {/* Action buttons */}
+                            <View className="flex-row gap-3 mb-2">
+                                <View className="flex-1">
+                                    <Button
+                                        label={copied ? 'Copied ✓' : 'Copy Key'}
+                                        onPress={handleCopy}
+                                        variant={copied ? 'ghost' : 'outline'}
+                                        size="sm"
+                                        className="w-full"
+                                    />
+                                </View>
+                                <View className="flex-1">
+                                    <Button
+                                        label={downloaded ? 'Saved ✓' : 'Download'}
+                                        onPress={handleDownload}
+                                        variant="primary"
+                                        size="sm"
+                                        className="w-full"
+                                    />
+                                </View>
+                            </View>
+                        </Card>
+
+                        {/* Warning */}
+                        <View className="bg-destructive/8 border border-destructive/15 rounded-[1.5rem] p-5 mb-6">
+                            <Text className="font-sans text-xs font-bold text-destructive mb-1">Important</Text>
+                            <Text className="font-sans text-xs text-destructive/80 leading-relaxed">
+                                If you lose your password and this recovery key, your encrypted data will be permanently inaccessible. No one — not even us — can recover it.
+                            </Text>
+                        </View>
+
+                        <Button
+                            label="I've saved my key — Continue"
+                            onPress={() => router.replace('/(main)')}
+                            className="w-full"
+                        />
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    }
+
+    // ── Signup form phase ─────────────────────────────────────────────────────
 
     return (
         <KeyboardAvoidingView
