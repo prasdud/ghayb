@@ -111,8 +111,8 @@ export default function ChatListScreen() {
                 return;
             }
             if (!res.ok) {
-                setStatus('error');
-                setErrorMsg('This user does not exist on the network.');
+                // Generic success to prevent username enumeration
+                setStatus('success');
                 return;
             }
 
@@ -371,7 +371,7 @@ export default function ChatListScreen() {
                             <View className="mb-4 bg-moss/10 border border-moss/20 p-4 rounded-[1.5rem]">
                                 <Text className="font-sans text-base font-bold text-moss text-center">Request Sent</Text>
                                 <Text className="font-sans text-xs text-moss/80 text-center mt-1">
-                                    Connection request sent to &ldquo;{uauid}&rdquo;. They&apos;ll see it next time they open the app.
+                                    If &ldquo;{uauid}&rdquo; is on the network, they&apos;ll see your request.
                                 </Text>
                             </View>
                         )}
