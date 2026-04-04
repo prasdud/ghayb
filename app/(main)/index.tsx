@@ -31,6 +31,7 @@ export default function ChatListScreen() {
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState('');
     const contactsRef = useRef<Contact[]>([]);
+    const dismissedIdsRef = useRef<Set<string>>(new Set());
 
     // Keep ref in sync so the polling callback always has current contacts
     useEffect(() => { contactsRef.current = contacts; }, [contacts]);
@@ -47,7 +48,10 @@ export default function ChatListScreen() {
     const fetchPending = useCallback(async () => {
         if (!session) return;
         try {
-            const knownIds = contactsRef.current.map((c) => c.id).join(',');
+            const knownIds = [
+                ...contactsRef.current.map((c) => c.id),
+                ...dismissedIdsRef.current,
+            ].join(',');
             const res = await fetch(
                 `${API_BASE}/messages/pending?knownUserIds=${encodeURIComponent(knownIds)}`,
                 { headers: { Authorization: `Bearer ${session.token}` } },
@@ -169,6 +173,7 @@ export default function ChatListScreen() {
     };
 
     const handleIgnoreConnection = (pending: PendingConnection) => {
+        dismissedIdsRef.current.add(pending.user.id);
         setPendingConnections((prev) => prev.filter((p) => p.conversationId !== pending.conversationId));
     };
 
