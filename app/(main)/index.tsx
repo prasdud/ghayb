@@ -172,9 +172,16 @@ export default function ChatListScreen() {
         }
     };
 
-    const handleIgnoreConnection = (pending: PendingConnection) => {
+    const handleIgnoreConnection = async (pending: PendingConnection) => {
         dismissedIdsRef.current.add(pending.user.id);
         setPendingConnections((prev) => prev.filter((p) => p.conversationId !== pending.conversationId));
+        // Delete conversation + messages from server (fire-and-forget)
+        try {
+            await fetch(`${API_BASE}/messages/conversations/${pending.conversationId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${session!.token}` },
+            });
+        } catch { }
     };
 
     const handleOpenOverlay = () => {

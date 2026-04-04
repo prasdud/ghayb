@@ -173,6 +173,30 @@ messagesRouter.get('/', requireAuth, async (c) => {
     return c.json(msgs)
 })
 
+// DELETE /messages/conversations/:id — delete a conversation and all its messages
+messagesRouter.delete('/conversations/:id', requireAuth, async (c) => {
+    const userId = c.get('userId')
+    const conversationId = c.req.param('id')
+
+    // Verify the user is a participant
+    const conversation = await db.query.conversations.findFirst({
+        where: and(
+            eq(conversations.id, conversationId),
+            or(eq(conversations.userAId, userId), eq(conversations.userBId, userId)),
+        ),
+    })
+
+    if (!conversation) {
+        return c.json({ error: 'Conversation not found' }, 404)
+    }
+
+    // Delete messages first (FK constraint), then the conversation
+    await db.delete(messages).where(eq(messages.conversationId, conversationId))
+    await db.delete(conversations).where(eq(conversations.id, conversationId))
+
+    return c.json({ ok: true })
+})
+
 // ── Push notification helper ──────────────────────────────────────────────────
 
 async function sendPushNotifications(recipientId: string) {
