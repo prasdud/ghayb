@@ -57,9 +57,66 @@ messagesRouter.post('/', requireAuth, async (c) => {
     }).returning()
 
     // Send push notification to recipient (fire-and-forget, no E2EE content)
-    sendPushNotifications(recipientId).catch(() => {})
+    sendPushNotifications(recipientId).catch(() => { })
 
     return c.json({ id: message.id, conversationId: conversation.id }, 201)
+})
+
+// GET /messages/pending?knownUserIds=id1,id2,id3
+// Returns conversations where the other participant is NOT in the known list.
+// Used by clients to discover incoming connection requests.
+messagesRouter.get('/pending', requireAuth, async (c) => {
+    const userId = c.get('userId')
+    const knownParam = c.req.query('knownUserIds') ?? ''
+    const knownUserIds = knownParam ? knownParam.split(',').filter(Boolean) : []
+
+    // Find all conversations involving this user
+    const allConversations = await db.query.conversations.findMany({
+        where: or(eq(conversations.userAId, userId), eq(conversations.userBId, userId)),
+    })
+
+    // Filter to conversations where the other user is NOT in the known list
+    const pending = allConversations.filter((conv) => {
+        const otherId = conv.userAId === userId ? conv.userBId : conv.userAId
+        return !knownUserIds.includes(otherId) && otherId !== userId
+    })
+
+    if (pending.length === 0) return c.json([])
+
+    // For each pending conversation, get the other user's info and the first message
+    const results = await Promise.all(
+        pending.map(async (conv) => {
+            const otherId = conv.userAId === userId ? conv.userBId : conv.userAId
+
+            const [otherUser, firstMessage] = await Promise.all([
+                db.query.users.findFirst({
+                    where: eq(users.id, otherId),
+                    columns: { id: true, username: true, publicKey: true },
+                }),
+                db.query.messages.findFirst({
+                    where: eq(messages.conversationId, conv.id),
+                    orderBy: (m, { asc }) => [asc(m.createdAt)],
+                }),
+            ])
+
+            if (!otherUser || !firstMessage) return null
+
+            return {
+                conversationId: conv.id,
+                user: otherUser,
+                firstMessage: {
+                    id: firstMessage.id,
+                    senderId: firstMessage.senderId,
+                    encryptedData: firstMessage.encryptedData,
+                    kyberEncryptedSessionKey: firstMessage.kyberEncryptedSessionKey,
+                    senderWrappedKey: firstMessage.senderWrappedKey,
+                    createdAt: firstMessage.createdAt,
+                },
+            }
+        }),
+    )
+
+    return c.json(results.filter(Boolean))
 })
 
 // GET /conversations?otherUserId= — find or return null for a conversation between two users
