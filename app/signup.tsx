@@ -201,10 +201,8 @@ export default function SignUpScreen() {
         setDownloaded(true);
     };
 
-    const progressWidth = progressAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0%', '100%'],
-    });
+    // scaleX works on web unlike percentage-based width interpolation
+    const progressScale = progressAnim;
 
     // ── Generating phase ──────────────────────────────────────────────────────
 
@@ -227,7 +225,12 @@ export default function SignUpScreen() {
                     {/* Progress bar */}
                     <View className="w-full max-w-xs h-3 bg-timber/20 rounded-full overflow-hidden">
                         <Animated.View
-                            style={{ width: progressWidth, height: '100%' }}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                transform: [{ scaleX: progressScale }],
+                                transformOrigin: 'left',
+                            }}
                             className="bg-moss rounded-full"
                         />
                     </View>
