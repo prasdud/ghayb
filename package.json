@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "eslint . --ignore-pattern 'node_modules/**' --ignore-pattern '.expo/**' --ignore-pattern 'packages/**'"
+    "lint": "eslint . --ignore-pattern 'node_modules/**' --ignore-pattern '.expo/**' --ignore-pattern 'packages/**'",
+    "db:studio": "cd server && bun run db:studio"
   },
   "dependencies": {
     "@dragbin/crypto": "file:./packages/dragbin-crypto",

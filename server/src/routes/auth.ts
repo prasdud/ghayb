@@ -12,7 +12,7 @@ const auth = new Hono()
 
 const registerLimiter = rateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
-    limit: 5,
+    limit: 500,
     keyGenerator: (c) => c.req.header('x-forwarded-for') ?? 'unknown',
 })
 
@@ -24,7 +24,7 @@ const saltsLimiter = rateLimiter({
 
 const loginLimiter = rateLimiter({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    limit: 10,
+    limit: 1000,
     keyGenerator: (c) => c.req.header('x-forwarded-for') ?? 'unknown',
 })
 
