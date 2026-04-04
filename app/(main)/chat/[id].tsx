@@ -16,7 +16,7 @@ interface Message {
 
 // ── Animated chat bubble ──────────────────────────────────────────────────────
 
-function ChatBubble({ msg, isMe, isNew }: { msg: Message; isMe: boolean; isNew: boolean }) {
+function ChatBubble({ msg, isMe, isNew, showTime }: { msg: Message; isMe: boolean; isNew: boolean; showTime: boolean }) {
     const animValue = useRef(new Animated.Value(isNew ? 0 : 1)).current;
 
     useEffect(() => {
@@ -49,7 +49,7 @@ function ChatBubble({ msg, isMe, isNew }: { msg: Message; isMe: boolean; isNew: 
                 ],
                 alignSelf: isMe ? 'flex-end' : 'flex-start',
                 maxWidth: '80%',
-                marginBottom: 12,
+                marginBottom: showTime ? 12 : 4,
             }}
         >
             <View
@@ -61,9 +61,11 @@ function ChatBubble({ msg, isMe, isNew }: { msg: Message; isMe: boolean; isNew: 
                     {msg.text}
                 </Text>
             </View>
-            <Text className={`font-sans text-[10px] text-muted-foreground mt-1 mx-3 ${isMe ? 'text-right' : 'text-left'}`}>
-                {msg.time}
-            </Text>
+            {showTime && (
+                <Text className={`font-sans text-[10px] text-muted-foreground mt-1 mx-3 ${isMe ? 'text-right' : 'text-left'}`}>
+                    {msg.time}
+                </Text>
+            )}
         </Animated.View>
     );
 }
@@ -202,12 +204,17 @@ export default function ChatScreen() {
         }
     };
 
-    const renderMessage = useCallback(({ item }: { item: Message }) => {
+    const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
         const isMe = item.senderId === session?.userId;
         const isNew = !seenIdsRef.current.has(item.id);
         if (isNew) seenIdsRef.current.add(item.id);
-        return <ChatBubble msg={item} isMe={isMe} isNew={isNew} />;
-    }, [session?.userId]);
+
+        // Collapse timestamps: hide if next message has the same time and same sender
+        const next = index < messages.length - 1 ? messages[index + 1] : null;
+        const showTime = !next || next.time !== item.time || next.senderId !== item.senderId;
+
+        return <ChatBubble msg={item} isMe={isMe} isNew={isNew} showTime={showTime} />;
+    }, [session?.userId, messages]);
 
     return (
         <KeyboardAvoidingView
